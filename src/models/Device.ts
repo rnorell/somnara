@@ -1,3 +1,11 @@
+export interface PairedDevice {
+  serial: string;
+  name: string;
+  pairedAt: string;
+  ownerId: string;
+  ownerEmail: string;
+}
+
 export type DeviceMode =
   | 'sunrise'
   | 'sunset'

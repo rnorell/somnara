@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -8,18 +8,11 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Feather } from '@expo/vector-icons';
 import { colors, typography, spacing, radii } from '../theme';
+import { Alarm } from '../models/Alarm';
+import { useSyncContext } from '../context/SyncContext';
 
 const DAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const WEEKDAYS = [1, 2, 3, 4, 5];
-
-interface Alarm {
-  id: string;
-  hour: number;
-  minute: number;
-  days: number[];
-  enabled: boolean;
-  label: string;
-}
 
 function formatTime(h: number, m: number) {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
@@ -102,9 +95,7 @@ function TimeSpinner({ value, min, max, onChange }: {
 }
 
 export function AlarmsTab() {
-  const [alarms, setAlarms] = useState<Alarm[]>([
-    { id: '1', hour: 6, minute: 30, days: WEEKDAYS, enabled: true, label: 'Sunrise alarm' },
-  ]);
+  const { alarms, setAlarms } = useSyncContext();
   const [adding, setAdding] = useState(false);
   const [newHour, setNewHour] = useState(7);
   const [newMinute, setNewMinute] = useState(0);
@@ -116,7 +107,7 @@ export function AlarmsTab() {
 
   const saveAlarm = () => {
     if (newDays.length === 0) return;
-    setAlarms(prev => [...prev, {
+    setAlarms([...alarms, {
       id: Date.now().toString(),
       hour: newHour,
       minute: newMinute,
@@ -131,11 +122,11 @@ export function AlarmsTab() {
   };
 
   const toggleAlarm = (id: string) => {
-    setAlarms(prev => prev.map(a => a.id === id ? { ...a, enabled: !a.enabled } : a));
+    setAlarms(alarms.map(a => a.id === id ? { ...a, enabled: !a.enabled } : a));
   };
 
   const deleteAlarm = (id: string) => {
-    setAlarms(prev => prev.filter(a => a.id !== id));
+    setAlarms(alarms.filter(a => a.id !== id));
   };
 
   return (

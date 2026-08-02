@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, Image, StyleSheet, ScrollView, SafeAreaView, TouchableOpacity } from 'react-native';
+import { View, Text, Image, StyleSheet, ScrollView, SafeAreaView, TouchableOpacity, Modal } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
 import { colors, typography, spacing, radii } from '../theme';
@@ -10,8 +10,12 @@ import { NextAlarmCard } from '../components/NextAlarmCard';
 import { AlarmsTab } from '../components/AlarmsTab';
 import { SleepTonightButton } from '../components/SleepTonightButton';
 import { SunriseDurationPicker } from '../components/SunriseDurationPicker';
+import { DeviceOwnershipCard } from '../components/DeviceOwnershipCard';
 import { useGreeting } from '../hooks/useGreeting';
 import { useDeviceStore } from '../state/deviceStore';
+import { useSyncContext } from '../context/SyncContext';
+import { HelpScreen } from './HelpScreen';
+import { PairedDevice } from '../models/Device';
 
 type Tab = 'Home' | 'Alarms' | 'Sounds' | 'Settings';
 
@@ -24,10 +28,17 @@ const TABS: { id: Tab; icon: React.ComponentProps<typeof Feather>['name'] }[] = 
 
 import React from 'react';
 
-export function WelcomeScreen() {
+interface WelcomeScreenProps {
+  pairedDevice: PairedDevice;
+  onDeviceReset: () => void;
+}
+
+export function WelcomeScreen({ pairedDevice, onDeviceReset }: WelcomeScreenProps) {
   const greeting = useGreeting();
   const { device, connect, disconnect, togglePower } = useDeviceStore();
+  const { preferences, setPreferences } = useSyncContext();
   const [activeTab, setActiveTab] = useState<Tab>('Home');
+  const [showHelp, setShowHelp] = useState(false);
 
   return (
     <LinearGradient
@@ -111,11 +122,37 @@ export function WelcomeScreen() {
 
           {activeTab === 'Settings' && (
             <View style={styles.settingsContent}>
-              <SunriseDurationPicker />
+              <SunriseDurationPicker
+                value={preferences.sunriseDuration}
+                onChange={d => setPreferences({ sunriseDuration: d as 15 | 30 | 45 })}
+              />
+              <Text style={[styles.settingsSection, { marginTop: spacing['6'] }]}>MY DEVICE</Text>
+              <DeviceOwnershipCard
+                device={pairedDevice}
+                onTransfer={(_newEmail) => {
+                  onDeviceReset();
+                }}
+                onReset={onDeviceReset}
+              />
+              <Text style={[styles.settingsSection, { marginTop: spacing['6'] }]}>SUPPORT</Text>
+              <TouchableOpacity style={styles.helpRow} onPress={() => setShowHelp(true)} activeOpacity={0.8}>
+                <View style={styles.helpIcon}>
+                  <Feather name="life-buoy" size={18} color={colors.accent.DEFAULT} />
+                </View>
+                <View style={styles.helpText}>
+                  <Text style={styles.helpTitle}>Help with my device</Text>
+                  <Text style={styles.helpSub}>Troubleshooting · diagnostics · contact support</Text>
+                </View>
+                <Feather name="chevron-right" size={16} color={colors.text.tertiary} />
+              </TouchableOpacity>
             </View>
           )}
         </ScrollView>
       </SafeAreaView>
+
+      <Modal visible={showHelp} animationType="slide" presentationStyle="pageSheet">
+        <HelpScreen pairedDevice={pairedDevice} onClose={() => setShowHelp(false)} />
+      </Modal>
     </LinearGradient>
   );
 }
@@ -219,5 +256,44 @@ const styles = StyleSheet.create({
     fontSize: typography.sizes.base,
     color: colors.text.tertiary,
     fontWeight: typography.weights.regular,
+  },
+  settingsSection: {
+    fontSize: typography.sizes.xs,
+    fontWeight: typography.weights.semibold,
+    letterSpacing: typography.letterSpacing.widest,
+    color: colors.text.tertiary,
+    marginBottom: spacing['3'],
+  },
+  helpRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.background.elevated,
+    borderRadius: radii.xl,
+    borderWidth: 1,
+    borderColor: colors.border.DEFAULT,
+    paddingHorizontal: spacing['4'],
+    paddingVertical: spacing['4'],
+    gap: spacing['3'],
+    shadowColor: '#C49A6C',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  helpIcon: {
+    width: 38, height: 38, borderRadius: 19,
+    backgroundColor: `${colors.accent.DEFAULT}12`,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  helpText: { flex: 1 },
+  helpTitle: {
+    fontSize: typography.sizes.base,
+    fontWeight: typography.weights.medium,
+    color: colors.text.primary,
+    marginBottom: 2,
+  },
+  helpSub: {
+    fontSize: typography.sizes.xs,
+    color: colors.text.tertiary,
   },
 });
