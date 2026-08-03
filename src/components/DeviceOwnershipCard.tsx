@@ -9,8 +9,7 @@ import { PairedDevice } from '../models/Device';
 
 interface Props {
   device: PairedDevice;
-  onTransfer: (newOwnerEmail: string) => void;
-  onReset: () => void;
+  onReset: () => Promise<void>;
 }
 
 function maskSerial(serial: string) {
@@ -25,7 +24,7 @@ function formatDate(iso: string) {
   });
 }
 
-export function DeviceOwnershipCard({ device, onTransfer, onReset }: Props) {
+export function DeviceOwnershipCard({ device, onReset }: Props) {
   const [showTransfer, setShowTransfer] = useState(false);
   const [transferEmail, setTransferEmail] = useState('');
   const [transferLoading, setTransferLoading] = useState(false);
@@ -36,27 +35,24 @@ export function DeviceOwnershipCard({ device, onTransfer, onReset }: Props) {
       setTransferError('Please enter a valid email address.');
       return;
     }
-    setTransferLoading(true);
-    setTransferError('');
-    // Simulate API call — replace with your backend
-    setTimeout(() => {
-      setTransferLoading(false);
-      setShowTransfer(false);
-      setTransferEmail('');
-      onTransfer(transferEmail.trim().toLowerCase());
-    }, 1200);
+    setTransferLoading(false);
+    setTransferError('Secure ownership transfer invitations are not configured yet. No changes were made.');
   }
 
   function handleReset() {
     Alert.alert(
-      'Reset & Unlink Device',
-      `This will remove "${device.name}" from your account and restore it to factory defaults. This cannot be undone.`,
+      'Unlink Device',
+      `This will remove "${device.name}" from your account. It does not factory-reset the physical device.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Reset Device',
+          text: 'Unlink Device',
           style: 'destructive',
-          onPress: onReset,
+          onPress: () => {
+            void onReset().catch(() => {
+              Alert.alert('Unable to unlink', 'The secure device service rejected the request. No changes were made.');
+            });
+          },
         },
       ],
     );
@@ -129,8 +125,8 @@ export function DeviceOwnershipCard({ device, onTransfer, onReset }: Props) {
           <View style={styles.actionLeft}>
             <Feather name="alert-triangle" size={16} color="#C0392B" />
             <View>
-              <Text style={[styles.actionTitle, styles.actionDanger]}>Reset & Unlink</Text>
-              <Text style={styles.actionSub}>Remove device and restore factory defaults</Text>
+              <Text style={[styles.actionTitle, styles.actionDanger]}>Unlink Device</Text>
+              <Text style={styles.actionSub}>Remove this device from your account</Text>
             </View>
           </View>
           <Feather name="chevron-right" size={16} color={colors.text.tertiary} />

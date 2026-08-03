@@ -30,10 +30,11 @@ import React from 'react';
 
 interface WelcomeScreenProps {
   pairedDevice: PairedDevice;
-  onDeviceReset: () => void;
+  onDeviceReset: () => Promise<void>;
+  onSignOut: () => void;
 }
 
-export function WelcomeScreen({ pairedDevice, onDeviceReset }: WelcomeScreenProps) {
+export function WelcomeScreen({ pairedDevice, onDeviceReset, onSignOut }: WelcomeScreenProps) {
   const greeting = useGreeting();
   const { device, connect, disconnect, togglePower } = useDeviceStore();
   const { preferences, setPreferences } = useSyncContext();
@@ -129,9 +130,6 @@ export function WelcomeScreen({ pairedDevice, onDeviceReset }: WelcomeScreenProp
               <Text style={[styles.settingsSection, { marginTop: spacing['6'] }]}>MY DEVICE</Text>
               <DeviceOwnershipCard
                 device={pairedDevice}
-                onTransfer={(_newEmail) => {
-                  onDeviceReset();
-                }}
                 onReset={onDeviceReset}
               />
               <Text style={[styles.settingsSection, { marginTop: spacing['6'] }]}>SUPPORT</Text>
@@ -145,6 +143,12 @@ export function WelcomeScreen({ pairedDevice, onDeviceReset }: WelcomeScreenProp
                 </View>
                 <Feather name="chevron-right" size={16} color={colors.text.tertiary} />
               </TouchableOpacity>
+              <Button
+                label="Sign Out"
+                onPress={onSignOut}
+                variant="secondary"
+                style={{ marginTop: spacing['4'] }}
+              />
             </View>
           )}
         </ScrollView>

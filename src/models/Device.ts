@@ -1,4 +1,5 @@
 export interface PairedDevice {
+  id: string;
   serial: string;
   name: string;
   pairedAt: string;

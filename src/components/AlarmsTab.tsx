@@ -7,6 +7,7 @@ import Animated, {
   interpolateColor,
 } from 'react-native-reanimated';
 import { Feather } from '@expo/vector-icons';
+import * as Crypto from 'expo-crypto';
 import { colors, typography, spacing, radii } from '../theme';
 import { Alarm } from '../models/Alarm';
 import { useSyncContext } from '../context/SyncContext';
@@ -108,7 +109,7 @@ export function AlarmsTab() {
   const saveAlarm = () => {
     if (newDays.length === 0) return;
     setAlarms([...alarms, {
-      id: Date.now().toString(),
+      id: Crypto.randomUUID(),
       hour: newHour,
       minute: newMinute,
       days: [...newDays].sort(),

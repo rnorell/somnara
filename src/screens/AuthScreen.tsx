@@ -6,13 +6,10 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
-import * as WebBrowser from 'expo-web-browser';
-import * as AuthSession from 'expo-auth-session';
-import * as Google from 'expo-auth-session/providers/google';
+import * as Crypto from 'expo-crypto';
 import { colors, typography, spacing, radii } from '../theme';
-import { User } from '../state/authStore';
-
-WebBrowser.maybeCompleteAuthSession();
+import { toAppUser, User } from '../state/authStore';
+import { isSupabaseConfigured, supabase } from '../lib/supabase';
 
 interface Props {
   onAuth: (user: User) => void;
@@ -52,65 +49,41 @@ export function AuthScreen({ onAuth }: Props) {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-
-  // Google OAuth — replace with your own client IDs for production
-  const [, googleResponse, googlePromptAsync] = Google.useAuthRequest({
-    clientId: 'YOUR_GOOGLE_WEB_CLIENT_ID',
-    iosClientId: 'YOUR_GOOGLE_IOS_CLIENT_ID',
-    androidClientId: 'YOUR_GOOGLE_ANDROID_CLIENT_ID',
-  });
-
-  React.useEffect(() => {
-    if (googleResponse?.type === 'success') {
-      const { authentication } = googleResponse;
-      fetchGoogleUser(authentication?.accessToken);
-    }
-  }, [googleResponse]);
-
-  async function fetchGoogleUser(token?: string) {
-    if (!token) return;
-    try {
-      const res = await fetch('https://www.googleapis.com/userinfo/v2/me', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      onAuth({
-        id: data.id,
-        email: data.email,
-        name: data.name,
-        avatar: data.picture,
-        provider: 'google',
-      });
-    } catch {
-      setError('Google sign-in failed. Please try again.');
-    }
-  }
+  const [notice, setNotice] = useState('');
 
   async function handleApple() {
-    // Apple Sign In — iOS only; requires expo-apple-authentication
-    // and Apple Developer provisioning in production.
     if (Platform.OS !== 'ios') {
       setError('Apple Sign In is available on iPhone and iPad.');
       return;
     }
     try {
+      if (!supabase) throw new Error('Authentication service is not configured');
       const AppleAuth = await import('expo-apple-authentication');
+      const nonce = Crypto.randomUUID();
+      const state = Crypto.randomUUID();
       const credential = await AppleAuth.signInAsync({
+        nonce,
+        state,
         requestedScopes: [
           AppleAuth.AppleAuthenticationScope.FULL_NAME,
           AppleAuth.AppleAuthenticationScope.EMAIL,
         ],
       });
-      const fullName = [
-        credential.fullName?.givenName,
-        credential.fullName?.familyName,
-      ].filter(Boolean).join(' ');
-      onAuth({
-        id: credential.user,
-        email: credential.email ?? '',
-        name: fullName || 'Somnara User',
+      if (!credential.identityToken || credential.state !== state) {
+        throw new Error('Apple authentication response could not be verified');
+      }
+      const { data, error: authError } = await supabase.auth.signInWithIdToken({
         provider: 'apple',
+        token: credential.identityToken,
+        nonce,
       });
+      if (authError || !data.user) throw authError ?? new Error('Missing authenticated user');
+
+      const fullName = [credential.fullName?.givenName, credential.fullName?.familyName]
+        .filter(Boolean)
+        .join(' ');
+      if (fullName) await supabase.auth.updateUser({ data: { full_name: fullName } });
+      onAuth(toAppUser(data.user));
     } catch (e: any) {
       if (e?.code !== 'ERR_REQUEST_CANCELED') {
         setError('Apple Sign In failed. Please try again.');
@@ -120,25 +93,43 @@ export function AuthScreen({ onAuth }: Props) {
 
   function handleGoogle() {
     setError('');
-    googlePromptAsync();
+    setError('Google sign-in is disabled until its verified Supabase OAuth callback is configured.');
   }
 
-  function handleEmail() {
+  async function handleEmail() {
     setError('');
-    if (!email.trim()) { setError('Please enter your email.'); return; }
-    if (password.length < 6) { setError('Password must be at least 6 characters.'); return; }
+    setNotice('');
+    if (!isSupabaseConfigured || !supabase) { setError('Authentication service is not configured.'); return; }
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) { setError('Please enter a valid email.'); return; }
+    if (password.length < 8) { setError('Password must be at least 8 characters.'); return; }
     if (mode === 'signup' && !name.trim()) { setError('Please enter your name.'); return; }
     setLoading(true);
-    // Simulate account creation/sign-in — swap for your auth backend call here
-    setTimeout(() => {
+    try {
+      if (mode === 'signup') {
+        const { data, error: authError } = await supabase.auth.signUp({
+          email: normalizedEmail,
+          password,
+          options: { data: { full_name: name.trim().slice(0, 100) } },
+        });
+        if (authError) throw authError;
+        if (data.session && data.user) onAuth(toAppUser(data.user));
+        else setNotice('Check your email to confirm your account, then sign in.');
+      } else {
+        const { data, error: authError } = await supabase.auth.signInWithPassword({
+          email: normalizedEmail,
+          password,
+        });
+        if (authError || !data.user) throw authError ?? new Error('Missing authenticated user');
+        onAuth(toAppUser(data.user));
+      }
+    } catch {
+      setError(mode === 'signin'
+        ? 'Sign-in failed. Check your details and try again.'
+        : 'Account creation failed. Please try again.');
+    } finally {
       setLoading(false);
-      onAuth({
-        id: Date.now().toString(),
-        email: email.trim(),
-        name: name.trim() || email.split('@')[0],
-        provider: 'email',
-      });
-    }, 800);
+    }
   }
 
   return (
@@ -242,6 +233,7 @@ export function AuthScreen({ onAuth }: Props) {
               </View>
 
               {error ? <Text style={styles.errorText}>{error}</Text> : null}
+              {notice ? <Text style={styles.noticeText}>{notice}</Text> : null}
 
               <TouchableOpacity
                 style={[styles.submitBtn, loading && styles.submitBtnLoading]}
@@ -407,6 +399,11 @@ const styles = StyleSheet.create({
     color: '#C0392B',
     textAlign: 'center',
     marginTop: -spacing['1'],
+  },
+  noticeText: {
+    fontSize: typography.sizes.xs,
+    color: colors.success,
+    textAlign: 'center',
   },
   submitBtn: {
     backgroundColor: colors.accent.DEFAULT,

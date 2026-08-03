@@ -14,6 +14,7 @@ import { Feather } from '@expo/vector-icons';
 import { colors, typography, spacing, radii } from '../theme';
 import { PairedDevice } from '../models/Device';
 import { User } from '../state/authStore';
+import { supabase } from '../lib/supabase';
 
 interface Props {
   user: User;
@@ -22,10 +23,9 @@ interface Props {
 
 type Step = 'enter' | 'verifying' | 'confirm' | 'success';
 
-function formatSerial(raw: string) {
+function maskActivationCode(raw: string) {
   const clean = raw.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
-  const parts = [clean.slice(0, 3), clean.slice(3, 7), clean.slice(7, 11)].filter(Boolean);
-  return parts.join('-');
+  return clean.length > 4 ? `••••-${clean.slice(-4)}` : '••••';
 }
 
 function PulsingRing({ delay = 0 }: { delay?: number }) {
@@ -66,6 +66,7 @@ export function DeviceActivationScreen({ user, onActivated }: Props) {
   const [serial, setSerial] = useState('');
   const [deviceName, setDeviceName] = useState('My Somnara');
   const [error, setError] = useState('');
+  const [claimedDevice, setClaimedDevice] = useState<PairedDevice | null>(null);
 
   function handleSerialChange(text: string) {
     const clean = text.replace(/[^A-Za-z0-9-]/g, '').toUpperCase();
@@ -73,7 +74,7 @@ export function DeviceActivationScreen({ user, onActivated }: Props) {
     setError('');
   }
 
-  function handleActivate() {
+  async function handleActivate() {
     const clean = serial.replace(/-/g, '');
     if (clean.length < 8) {
       setError('Please enter a valid device code (e.g. SOM-2024-XXXX).');
@@ -81,20 +82,52 @@ export function DeviceActivationScreen({ user, onActivated }: Props) {
     }
     setError('');
     setStep('verifying');
-    // Simulate device lookup — swap for your API call here
-    setTimeout(() => setStep('confirm'), 2200);
+    if (!supabase) {
+      setError('Secure device activation is not configured.');
+      setStep('enter');
+      return;
+    }
+    const { data, error: claimError } = await supabase.rpc('claim_device', {
+      p_activation_code: serial.trim(),
+      p_name: deviceName.trim().slice(0, 60) || 'My Somnara',
+    });
+    if (claimError || !data) {
+      setError('This device code could not be verified. Check it and try again.');
+      setStep('enter');
+      return;
+    }
+    const row = Array.isArray(data) ? data[0] : data;
+    const device: PairedDevice = {
+      id: row.id,
+      serial: row.serial,
+      name: row.name,
+      pairedAt: row.paired_at,
+      ownerId: user.id,
+      ownerEmail: user.email,
+    };
+    setClaimedDevice(device);
+    setStep('confirm');
   }
 
-  function handlePair() {
+  async function handlePair() {
+    if (!supabase || !claimedDevice) {
+      setError('Secure device activation did not complete.');
+      setStep('enter');
+      return;
+    }
+    const name = deviceName.trim().slice(0, 60) || 'My Somnara';
+    const { error: updateError } = await supabase
+      .from('paired_devices')
+      .update({ name })
+      .eq('id', claimedDevice.id)
+      .eq('user_id', user.id);
+    if (updateError) {
+      setError('The device was verified, but its name could not be saved. Please try again.');
+      return;
+    }
     setStep('success');
     setTimeout(() => {
-      onActivated({
-        serial: formatSerial(serial),
-        name: deviceName.trim() || 'My Somnara',
-        pairedAt: new Date().toISOString(),
-        ownerId: user.id,
-        ownerEmail: user.email,
-      });
+      onActivated({ ...claimedDevice, name });
     }, 2000);
   }
 
@@ -111,10 +144,10 @@ export function DeviceActivationScreen({ user, onActivated }: Props) {
             />
 
             {step === 'enter' && <EnterStep serial={serial} onChange={handleSerialChange} onNext={handleActivate} error={error} />}
-            {step === 'verifying' && <VerifyingStep serial={formatSerial(serial)} />}
+            {step === 'verifying' && <VerifyingStep serial={maskActivationCode(serial)} />}
             {step === 'confirm' && (
               <ConfirmStep
-                serial={formatSerial(serial)}
+                serial={claimedDevice?.serial ?? ''}
                 deviceName={deviceName}
                 onNameChange={setDeviceName}
                 onPair={handlePair}

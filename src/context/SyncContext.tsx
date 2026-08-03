@@ -53,9 +53,9 @@ export function SyncProvider({ userId, children }: Props) {
     async function load() {
       try {
         const [savedAlarms, savedPrefs, savedName] = await Promise.all([
-          storage.loadAlarms(),
-          storage.loadPreferences(),
-          storage.loadDeviceName(),
+          storage.loadAlarms(userIdRef.current),
+          storage.loadPreferences(userIdRef.current),
+          storage.loadDeviceName(userIdRef.current),
         ]);
         if (savedAlarms) setAlarmsState(savedAlarms);
         if (savedPrefs) setPreferencesState(savedPrefs);
@@ -91,7 +91,7 @@ export function SyncProvider({ userId, children }: Props) {
         label: r.label ?? '',
       }));
       setAlarmsState(mapped);
-      storage.saveAlarms(mapped);
+      void storage.saveAlarms(uid, mapped);
     }
     if (prefsData) {
       const prefs: Preferences = {
@@ -99,20 +99,20 @@ export function SyncProvider({ userId, children }: Props) {
         timezone: prefsData.timezone,
       };
       setPreferencesState(prefs);
-      storage.savePreferences(prefs);
+      void storage.savePreferences(uid, prefs);
     }
   }
 
   const setAlarms = useCallback((next: Alarm[]) => {
     setAlarmsState(next);
-    storage.saveAlarms(next);
+    void storage.saveAlarms(userIdRef.current, next);
     if (supabase) pushAlarmsToSupabase(userIdRef.current, next);
   }, []);
 
   const setPreferences = useCallback((patch: Partial<Preferences>) => {
     setPreferencesState(prev => {
       const next = { ...prev, ...patch };
-      storage.savePreferences(next);
+      void storage.savePreferences(userIdRef.current, next);
       if (supabase) pushPrefsToSupabase(userIdRef.current, next);
       return next;
     });
@@ -120,7 +120,7 @@ export function SyncProvider({ userId, children }: Props) {
 
   const setDeviceName = useCallback((name: string) => {
     setDeviceNameState(name);
-    storage.saveDeviceName(name);
+    void storage.saveDeviceName(userIdRef.current, name);
     if (supabase) {
       supabase.from('paired_devices')
         .update({ name })
@@ -143,7 +143,10 @@ export function SyncProvider({ userId, children }: Props) {
 
 async function pushAlarmsToSupabase(userId: string, alarms: Alarm[]) {
   if (!supabase) return;
-  // Delete removed alarms, upsert current set
+  const { data: existing } = await supabase
+    .from('alarms')
+    .select('id')
+    .eq('user_id', userId);
   const rows = alarms.map(a => ({
     id: a.id,
     user_id: userId,
@@ -154,10 +157,13 @@ async function pushAlarmsToSupabase(userId: string, alarms: Alarm[]) {
     label: a.label,
     updated_at: new Date().toISOString(),
   }));
-  await supabase.from('alarms').upsert(rows, { onConflict: 'id' });
-  const ids = alarms.map(a => a.id);
-  if (ids.length > 0) {
-    await supabase.from('alarms').delete().eq('user_id', userId).not('id', 'in', `(${ids.join(',')})`);
+  if (rows.length > 0) {
+    await supabase.from('alarms').upsert(rows, { onConflict: 'user_id,id' });
+  }
+  const nextIds = new Set(alarms.map(a => a.id));
+  const removedIds = (existing ?? []).map(row => row.id).filter(id => !nextIds.has(id));
+  if (removedIds.length > 0) {
+    await supabase.from('alarms').delete().eq('user_id', userId).in('id', removedIds);
   }
 }
 
