@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, Image, TextInput, TouchableOpacity,
+  View, Text, TextInput, TouchableOpacity,
   StyleSheet, SafeAreaView, Platform, ActivityIndicator,
   KeyboardAvoidingView, ScrollView,
 } from 'react-native';
@@ -15,6 +15,7 @@ import { colors, typography, spacing, radii } from '../theme';
 import { PairedDevice } from '../models/Device';
 import { User } from '../state/authStore';
 import { supabase } from '../lib/supabase';
+import { SomnaraLogo } from '../components/SomnaraLogo';
 
 interface Props {
   user: User;
@@ -137,11 +138,7 @@ export function DeviceActivationScreen({ user, onActivated }: Props) {
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
           <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
-            <Image
-              source={require('../../assets/logo.png')}
-              style={styles.logo}
-              resizeMode="contain"
-            />
+            <SomnaraLogo />
 
             {step === 'enter' && <EnterStep serial={serial} onChange={handleSerialChange} onNext={handleActivate} error={error} />}
             {step === 'verifying' && <VerifyingStep serial={maskActivationCode(serial)} />}
@@ -314,13 +311,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing['6'],
     paddingBottom: spacing['10'],
     alignItems: 'center',
-  },
-  logo: {
-    width: 240,
-    height: 130,
-    marginBottom: -60,
-    marginTop: spacing['4'],
-    tintColor: colors.accent.DEFAULT,
   },
   stepContainer: {
     width: '100%',

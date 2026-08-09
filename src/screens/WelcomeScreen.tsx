@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, Image, StyleSheet, ScrollView, SafeAreaView, TouchableOpacity, Modal } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, SafeAreaView, TouchableOpacity, Modal } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
 import { colors, typography, spacing, radii } from '../theme';
@@ -16,6 +16,7 @@ import { useDeviceStore } from '../state/deviceStore';
 import { useSyncContext } from '../context/SyncContext';
 import { HelpScreen } from './HelpScreen';
 import { PairedDevice } from '../models/Device';
+import { SomnaraLogo } from '../components/SomnaraLogo';
 
 type Tab = 'Home' | 'Alarms' | 'Sounds' | 'Settings';
 
@@ -52,11 +53,7 @@ export function WelcomeScreen({ pairedDevice, onDeviceReset, onSignOut }: Welcom
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.header}>
-            <Image
-              source={require('../../assets/logo.png')}
-              style={styles.logo}
-              resizeMode="contain"
-            />
+            <SomnaraLogo />
           </View>
 
           <View style={styles.illustration}>
@@ -176,12 +173,6 @@ const styles = StyleSheet.create({
     paddingTop: spacing['6'],
     paddingBottom: 0,
     alignItems: 'center',
-  },
-  logo: {
-    width: 380,
-    height: 220,
-    marginBottom: -130,
-    tintColor: colors.accent.DEFAULT,
   },
   greeting: {
     fontSize: typography.sizes['3xl'],
