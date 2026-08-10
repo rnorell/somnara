@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  View, Text, Image, TextInput, TouchableOpacity,
+  View, Text, TextInput, TouchableOpacity,
   StyleSheet, SafeAreaView, Platform, KeyboardAvoidingView,
   ScrollView, ActivityIndicator,
 } from 'react-native';
@@ -10,6 +10,7 @@ import * as Crypto from 'expo-crypto';
 import { colors, typography, spacing, radii } from '../theme';
 import { toAppUser, User } from '../state/authStore';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
+import { SomnaraLogo } from '../components/SomnaraLogo';
 
 interface Props {
   onAuth: (user: User) => void;
@@ -145,11 +146,7 @@ export function AuthScreen({ onAuth }: Props) {
             showsVerticalScrollIndicator={false}
           >
             {/* Logo */}
-            <Image
-              source={require('../../assets/logo.png')}
-              style={styles.logo}
-              resizeMode="contain"
-            />
+            <SomnaraLogo />
 
             {/* Heading */}
             <Text style={styles.title}>
@@ -297,13 +294,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing['6'],
     paddingBottom: spacing['10'],
     alignItems: 'center',
-  },
-  logo: {
-    width: 280,
-    height: 160,
-    marginBottom: -80,
-    marginTop: spacing['4'],
-    tintColor: colors.accent.DEFAULT,
   },
   title: {
     fontSize: typography.sizes['2xl'],
