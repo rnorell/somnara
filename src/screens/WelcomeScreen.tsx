@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, SafeAreaView, TouchableOpacity, Modal } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, SafeAreaView, TouchableOpacity, Modal, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
 import { colors, typography, spacing, radii } from '../theme';
@@ -33,14 +33,34 @@ interface WelcomeScreenProps {
   pairedDevice: PairedDevice;
   onDeviceReset: () => Promise<void>;
   onSignOut: () => void;
+  onDeleteAccount: () => Promise<void>;
 }
 
-export function WelcomeScreen({ pairedDevice, onDeviceReset, onSignOut }: WelcomeScreenProps) {
+export function WelcomeScreen({ pairedDevice, onDeviceReset, onSignOut, onDeleteAccount }: WelcomeScreenProps) {
   const greeting = useGreeting();
   const { device, connect, disconnect, togglePower } = useDeviceStore();
   const { preferences, setPreferences } = useSyncContext();
   const [activeTab, setActiveTab] = useState<Tab>('Home');
   const [showHelp, setShowHelp] = useState(false);
+
+  function handleDeleteAccount() {
+    Alert.alert(
+      'Delete Account',
+      'This permanently deletes your account, paired device, alarms, and preferences. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Account',
+          style: 'destructive',
+          onPress: () => {
+            void onDeleteAccount().catch(() => {
+              Alert.alert('Unable to delete account', 'Please try again.');
+            });
+          },
+        },
+      ],
+    );
+  }
 
   return (
     <LinearGradient
@@ -146,6 +166,20 @@ export function WelcomeScreen({ pairedDevice, onDeviceReset, onSignOut }: Welcom
                 variant="secondary"
                 style={{ marginTop: spacing['4'] }}
               />
+              <TouchableOpacity
+                style={[styles.helpRow, styles.dangerRow]}
+                onPress={handleDeleteAccount}
+                activeOpacity={0.8}
+              >
+                <View style={[styles.helpIcon, styles.dangerIcon]}>
+                  <Feather name="alert-triangle" size={18} color="#C0392B" />
+                </View>
+                <View style={styles.helpText}>
+                  <Text style={[styles.helpTitle, styles.dangerText]}>Delete Account</Text>
+                  <Text style={styles.helpSub}>Permanently deletes your account and data</Text>
+                </View>
+                <Feather name="chevron-right" size={16} color={colors.text.tertiary} />
+              </TouchableOpacity>
             </View>
           )}
         </ScrollView>
@@ -290,5 +324,14 @@ const styles = StyleSheet.create({
   helpSub: {
     fontSize: typography.sizes.xs,
     color: colors.text.tertiary,
+  },
+  dangerRow: {
+    marginTop: spacing['3'],
+  },
+  dangerIcon: {
+    backgroundColor: '#C0392B12',
+  },
+  dangerText: {
+    color: '#C0392B',
   },
 });

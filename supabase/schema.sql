@@ -186,10 +186,34 @@ begin
 end;
 $$;
 
+create or replace function public.delete_own_account()
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_uid uuid := (select auth.uid());
+  v_serial text;
+begin
+  if v_uid is null then raise exception 'Authentication required'; end if;
+  select serial into v_serial from public.paired_devices where user_id = v_uid;
+  if v_serial is not null then
+    update private.device_inventory
+      set status = 'reset_required', claimed_by = null, claimed_at = null
+      where serial = v_serial;
+  end if;
+  -- Cascades to profiles/paired_devices/alarms/preferences via existing FKs.
+  delete from auth.users where id = v_uid;
+end;
+$$;
+
 revoke all on function public.claim_device(text, text) from public, anon;
 revoke all on function public.unlink_device(uuid) from public, anon;
+revoke all on function public.delete_own_account() from public, anon;
 grant execute on function public.claim_device(text, text) to authenticated;
 grant execute on function public.unlink_device(uuid) to authenticated;
+grant execute on function public.delete_own_account() to authenticated;
 
 create or replace function public.handle_new_user()
 returns trigger

@@ -1,14 +1,17 @@
 import 'react-native-reanimated';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { AuthScreen } from './src/screens/AuthScreen';
 import { DeviceActivationScreen } from './src/screens/DeviceActivationScreen';
 import { OnboardingScreen } from './src/screens/OnboardingScreen';
+import { ResetPasswordScreen } from './src/screens/ResetPasswordScreen';
 import { WelcomeScreen } from './src/screens/WelcomeScreen';
 import { SyncProvider } from './src/context/SyncContext';
 import { toAppUser, User } from './src/state/authStore';
 import { PairedDevice } from './src/models/Device';
 import { supabase } from './src/lib/supabase';
+import { storage } from './src/lib/storage';
+import { useAuthDeepLink } from './src/hooks/useAuthDeepLink';
 import { colors } from './src/theme';
 
 export default function App() {
@@ -17,6 +20,11 @@ export default function App() {
   const [onboarded, setOnboarded] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
   const [deviceLoading, setDeviceLoading] = useState(false);
+  const [pendingPasswordRecovery, setPendingPasswordRecovery] = useState(false);
+  const [sessionExpiredNotice, setSessionExpiredNotice] = useState('');
+  const hadSessionRef = useRef(false);
+  const signingOutRef = useRef(false);
+  const deepLinkError = useAuthDeepLink();
 
   useEffect(() => {
     if (!supabase) {
@@ -31,8 +39,19 @@ export default function App() {
       setAuthLoading(false);
     });
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
       if (!active) return;
+      if (event === 'PASSWORD_RECOVERY') setPendingPasswordRecovery(true);
+      if (session) {
+        hadSessionRef.current = true;
+        setSessionExpiredNotice('');
+      } else {
+        if (hadSessionRef.current && !signingOutRef.current) {
+          setSessionExpiredNotice('Your session expired — please sign in again.');
+        }
+        hadSessionRef.current = false;
+        signingOutRef.current = false;
+      }
       setUser(session?.user ? toAppUser(session.user) : null);
       if (!session) {
         setPairedDevice(null);
@@ -79,7 +98,13 @@ export default function App() {
     return <View style={styles.loading}><ActivityIndicator color={colors.accent.DEFAULT} /></View>;
   }
 
-  if (!user) return <AuthScreen onAuth={setUser} />;
+  if (pendingPasswordRecovery) {
+    return <ResetPasswordScreen onDone={() => setPendingPasswordRecovery(false)} />;
+  }
+
+  if (!user) {
+    return <AuthScreen onAuth={setUser} sessionExpiredNotice={deepLinkError ?? (sessionExpiredNotice || undefined)} />;
+  }
   if (!pairedDevice) return <DeviceActivationScreen user={user} onActivated={setPairedDevice} />;
   if (!onboarded) return <OnboardingScreen onComplete={() => setOnboarded(true)} />;
 
@@ -91,12 +116,28 @@ export default function App() {
     setOnboarded(false);
   }
 
+  function signOut() {
+    signingOutRef.current = true;
+    if (user) void storage.clear(user.id);
+    void supabase?.auth.signOut();
+  }
+
+  async function deleteAccount() {
+    if (!supabase || !user) throw new Error('Authentication service is not configured.');
+    const { error } = await supabase.rpc('delete_own_account');
+    if (error) throw error;
+    signingOutRef.current = true;
+    await storage.clear(user.id);
+    await supabase.auth.signOut();
+  }
+
   return (
     <SyncProvider userId={user.id}>
       <WelcomeScreen
         pairedDevice={pairedDevice}
         onDeviceReset={unlinkDevice}
-        onSignOut={() => { void supabase?.auth.signOut(); }}
+        onSignOut={signOut}
+        onDeleteAccount={deleteAccount}
       />
     </SyncProvider>
   );

@@ -7,13 +7,17 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
 import * as Crypto from 'expo-crypto';
+import * as Linking from 'expo-linking';
 import { colors, typography, spacing, radii } from '../theme';
 import { toAppUser, User } from '../state/authStore';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import { SomnaraLogo } from '../components/SomnaraLogo';
 
+const AUTH_REDIRECT_URL = Linking.createURL('auth/callback');
+
 interface Props {
   onAuth: (user: User) => void;
+  sessionExpiredNotice?: string;
 }
 
 function SocialButton({
@@ -42,15 +46,16 @@ function Divider() {
   );
 }
 
-export function AuthScreen({ onAuth }: Props) {
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
+export function AuthScreen({ onAuth, sessionExpiredNotice }: Props) {
+  const [mode, setMode] = useState<'signin' | 'signup' | 'forgot'>('signin');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState(sessionExpiredNotice ?? '');
   const [notice, setNotice] = useState('');
+  const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
 
   async function handleApple() {
     if (Platform.OS !== 'ios') {
@@ -60,10 +65,13 @@ export function AuthScreen({ onAuth }: Props) {
     try {
       if (!supabase) throw new Error('Authentication service is not configured');
       const AppleAuth = await import('expo-apple-authentication');
+      // Apple's request needs the SHA-256 hash of the nonce; Supabase verifies
+      // by hashing the raw nonce itself and comparing against the token's claim.
       const nonce = Crypto.randomUUID();
+      const hashedNonce = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, nonce);
       const state = Crypto.randomUUID();
       const credential = await AppleAuth.signInAsync({
-        nonce,
+        nonce: hashedNonce,
         state,
         requestedScopes: [
           AppleAuth.AppleAuthenticationScope.FULL_NAME,
@@ -100,6 +108,7 @@ export function AuthScreen({ onAuth }: Props) {
   async function handleEmail() {
     setError('');
     setNotice('');
+    setAwaitingConfirmation(false);
     if (!isSupabaseConfigured || !supabase) { setError('Authentication service is not configured.'); return; }
     const normalizedEmail = email.trim().toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) { setError('Please enter a valid email.'); return; }
@@ -111,11 +120,17 @@ export function AuthScreen({ onAuth }: Props) {
         const { data, error: authError } = await supabase.auth.signUp({
           email: normalizedEmail,
           password,
-          options: { data: { full_name: name.trim().slice(0, 100) } },
+          options: {
+            data: { full_name: name.trim().slice(0, 100) },
+            emailRedirectTo: AUTH_REDIRECT_URL,
+          },
         });
         if (authError) throw authError;
         if (data.session && data.user) onAuth(toAppUser(data.user));
-        else setNotice('Check your email to confirm your account, then sign in.');
+        else {
+          setNotice('Check your email to confirm your account, then sign in.');
+          setAwaitingConfirmation(true);
+        }
       } else {
         const { data, error: authError } = await supabase.auth.signInWithPassword({
           email: normalizedEmail,
@@ -128,6 +143,41 @@ export function AuthScreen({ onAuth }: Props) {
       setError(mode === 'signin'
         ? 'Sign-in failed. Check your details and try again.'
         : 'Account creation failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleResendConfirmation() {
+    if (!supabase) return;
+    setError('');
+    try {
+      const { error: authError } = await supabase.auth.resend({
+        type: 'signup',
+        email: email.trim().toLowerCase(),
+      });
+      if (authError) throw authError;
+      setNotice('Confirmation email resent.');
+    } catch {
+      setError('Could not resend the confirmation email. Please try again.');
+    }
+  }
+
+  async function handleForgotPassword() {
+    setError('');
+    setNotice('');
+    if (!isSupabaseConfigured || !supabase) { setError('Authentication service is not configured.'); return; }
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) { setError('Please enter a valid email.'); return; }
+    setLoading(true);
+    try {
+      const { error: authError } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
+        redirectTo: AUTH_REDIRECT_URL,
+      });
+      if (authError) throw authError;
+      setNotice('Check your email for a password reset link.');
+    } catch {
+      setError('Could not send the reset email. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -150,31 +200,37 @@ export function AuthScreen({ onAuth }: Props) {
 
             {/* Heading */}
             <Text style={styles.title}>
-              {mode === 'signin' ? 'Welcome back' : 'Create account'}
+              {mode === 'signin' ? 'Welcome back' : mode === 'signup' ? 'Create account' : 'Reset password'}
             </Text>
             <Text style={styles.subtitle}>
               {mode === 'signin'
                 ? 'Sign in to your Somnara account'
-                : 'Set up your personal sunrise profile'}
+                : mode === 'signup'
+                ? 'Set up your personal sunrise profile'
+                : "Enter your email and we'll send you a reset link"}
             </Text>
 
-            {/* Social buttons */}
-            <View style={styles.socialRow}>
-              <SocialButton
-                icon={<AppleIcon />}
-                label="Apple"
-                onPress={handleApple}
-                style={styles.appleBtn}
-              />
-              <SocialButton
-                icon={<GoogleIcon />}
-                label="Google"
-                onPress={handleGoogle}
-                style={styles.googleBtn}
-              />
-            </View>
+            {mode !== 'forgot' && (
+              <>
+                {/* Social buttons */}
+                <View style={styles.socialRow}>
+                  <SocialButton
+                    icon={<AppleIcon />}
+                    label="Apple"
+                    onPress={handleApple}
+                    style={styles.appleBtn}
+                  />
+                  <SocialButton
+                    icon={<GoogleIcon />}
+                    label="Google"
+                    onPress={handleGoogle}
+                    style={styles.googleBtn}
+                  />
+                </View>
 
-            <Divider />
+                <Divider />
+              </>
+            )}
 
             {/* Email form */}
             <View style={styles.form}>
@@ -208,40 +264,56 @@ export function AuthScreen({ onAuth }: Props) {
                 />
               </View>
 
-              <View style={styles.inputWrapper}>
-                <Feather name="lock" size={16} color={colors.text.tertiary} style={styles.inputIcon} />
-                <TextInput
-                  style={[styles.input, styles.inputPassword]}
-                  placeholder="Password"
-                  placeholderTextColor={colors.text.tertiary}
-                  value={password}
-                  onChangeText={setPassword}
-                  secureTextEntry={!showPassword}
-                  returnKeyType="done"
-                  onSubmitEditing={handleEmail}
-                />
-                <TouchableOpacity onPress={() => setShowPassword(v => !v)} hitSlop={10}>
-                  <Feather
-                    name={showPassword ? 'eye-off' : 'eye'}
-                    size={16}
-                    color={colors.text.tertiary}
+              {mode !== 'forgot' && (
+                <View style={styles.inputWrapper}>
+                  <Feather name="lock" size={16} color={colors.text.tertiary} style={styles.inputIcon} />
+                  <TextInput
+                    style={[styles.input, styles.inputPassword]}
+                    placeholder="Password"
+                    placeholderTextColor={colors.text.tertiary}
+                    value={password}
+                    onChangeText={setPassword}
+                    secureTextEntry={!showPassword}
+                    returnKeyType="done"
+                    onSubmitEditing={handleEmail}
                   />
+                  <TouchableOpacity onPress={() => setShowPassword(v => !v)} hitSlop={10}>
+                    <Feather
+                      name={showPassword ? 'eye-off' : 'eye'}
+                      size={16}
+                      color={colors.text.tertiary}
+                    />
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {mode === 'signin' && (
+                <TouchableOpacity
+                  onPress={() => { setMode('forgot'); setError(''); setNotice(''); }}
+                  style={styles.forgotRow}
+                >
+                  <Text style={styles.toggleLink}>Forgot password?</Text>
                 </TouchableOpacity>
-              </View>
+              )}
 
               {error ? <Text style={styles.errorText}>{error}</Text> : null}
               {notice ? <Text style={styles.noticeText}>{notice}</Text> : null}
+              {awaitingConfirmation ? (
+                <TouchableOpacity onPress={handleResendConfirmation}>
+                  <Text style={styles.toggleLink}>Resend confirmation email</Text>
+                </TouchableOpacity>
+              ) : null}
 
               <TouchableOpacity
                 style={[styles.submitBtn, loading && styles.submitBtnLoading]}
-                onPress={handleEmail}
+                onPress={mode === 'forgot' ? handleForgotPassword : handleEmail}
                 activeOpacity={0.85}
                 disabled={loading}
               >
                 {loading
                   ? <ActivityIndicator color="#fff" size="small" />
                   : <Text style={styles.submitBtnText}>
-                      {mode === 'signin' ? 'Sign In' : 'Create Account'}
+                      {mode === 'signin' ? 'Sign In' : mode === 'signup' ? 'Create Account' : 'Send Reset Link'}
                     </Text>
                 }
               </TouchableOpacity>
@@ -249,14 +321,22 @@ export function AuthScreen({ onAuth }: Props) {
 
             {/* Toggle mode */}
             <View style={styles.toggleRow}>
-              <Text style={styles.toggleText}>
-                {mode === 'signin' ? "Don't have an account? " : 'Already have an account? '}
-              </Text>
-              <TouchableOpacity onPress={() => { setMode(m => m === 'signin' ? 'signup' : 'signin'); setError(''); }}>
-                <Text style={styles.toggleLink}>
-                  {mode === 'signin' ? 'Sign up' : 'Sign in'}
-                </Text>
-              </TouchableOpacity>
+              {mode === 'forgot' ? (
+                <TouchableOpacity onPress={() => { setMode('signin'); setError(''); setNotice(''); }}>
+                  <Text style={styles.toggleLink}>Back to sign in</Text>
+                </TouchableOpacity>
+              ) : (
+                <>
+                  <Text style={styles.toggleText}>
+                    {mode === 'signin' ? "Don't have an account? " : 'Already have an account? '}
+                  </Text>
+                  <TouchableOpacity onPress={() => { setMode(m => m === 'signin' ? 'signup' : 'signin'); setError(''); setNotice(''); setAwaitingConfirmation(false); }}>
+                    <Text style={styles.toggleLink}>
+                      {mode === 'signin' ? 'Sign up' : 'Sign in'}
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              )}
             </View>
 
             <Text style={styles.legal}>
@@ -365,6 +445,7 @@ const styles = StyleSheet.create({
     letterSpacing: typography.letterSpacing.wide,
   },
   form: { width: '100%', gap: spacing['3'] },
+  forgotRow: { alignSelf: 'flex-end' },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',

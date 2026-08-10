@@ -54,6 +54,10 @@ export const supabase = isSupabaseConfigured
         autoRefreshToken: true,
         persistSession: true,
         detectSessionInUrl: false,
+        // Required for email confirmation / password recovery deep links —
+        // signUp/resetPasswordForEmail only generate an exchangeable code
+        // when the client is configured for PKCE.
+        flowType: 'pkce',
         lock: processLock,
       },
     })

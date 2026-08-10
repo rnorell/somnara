@@ -57,4 +57,12 @@ export const storage = {
   async saveDeviceName(userId: string, name: string): Promise<void> {
     await AsyncStorage.setItem(key(userId, 'device_name'), name.slice(0, 60));
   },
+
+  async clear(userId: string): Promise<void> {
+    await AsyncStorage.multiRemove([
+      key(userId, 'alarms'),
+      key(userId, 'preferences'),
+      key(userId, 'device_name'),
+    ]);
+  },
 };
