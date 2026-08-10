@@ -5,7 +5,7 @@ import {
   ScrollView, ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Feather } from '@expo/vector-icons';
+import { Feather, FontAwesome } from '@expo/vector-icons';
 import * as Crypto from 'expo-crypto';
 import * as Linking from 'expo-linking';
 import { colors, typography, spacing, radii } from '../theme';
@@ -21,17 +21,18 @@ interface Props {
 }
 
 function SocialButton({
-  icon, label, onPress, style,
+  icon, label, onPress, style, labelColor,
 }: {
   icon: React.ReactNode;
   label: string;
   onPress: () => void;
   style?: object;
+  labelColor?: string;
 }) {
   return (
     <TouchableOpacity style={[styles.socialBtn, style]} onPress={onPress} activeOpacity={0.8}>
       {icon}
-      <Text style={styles.socialBtnText}>{label}</Text>
+      <Text style={[styles.socialBtnText, labelColor ? { color: labelColor } : undefined]}>{label}</Text>
     </TouchableOpacity>
   );
 }
@@ -219,6 +220,7 @@ export function AuthScreen({ onAuth, sessionExpiredNotice }: Props) {
                     label="Apple"
                     onPress={handleApple}
                     style={styles.appleBtn}
+                    labelColor="#fff"
                   />
                   <SocialButton
                     icon={<GoogleIcon />}
@@ -350,11 +352,7 @@ export function AuthScreen({ onAuth, sessionExpiredNotice }: Props) {
 }
 
 function AppleIcon() {
-  return (
-    <View style={styles.appleIconWrap}>
-      <Text style={styles.appleIconText}></Text>
-    </View>
-  );
+  return <FontAwesome name="apple" size={18} color="#fff" />;
 }
 
 function GoogleIcon() {
@@ -417,8 +415,6 @@ const styles = StyleSheet.create({
     fontSize: typography.sizes.base,
     fontWeight: typography.weights.semibold,
   },
-  appleIconWrap: { width: 18, alignItems: 'center' },
-  appleIconText: { fontSize: 17, color: '#fff', lineHeight: 20 },
   googleIconWrap: {
     width: 18, height: 18, borderRadius: 9,
     backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center',
