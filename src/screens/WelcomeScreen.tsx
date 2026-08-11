@@ -18,6 +18,7 @@ import { useSyncContext } from '../context/SyncContext';
 import { HelpScreen } from './HelpScreen';
 import { PairedDevice } from '../models/Device';
 import { SomnaraLogo } from '../components/SomnaraLogo';
+import { isProduction } from '../lib/env';
 
 type Tab = 'Home' | 'Alarms' | 'Sounds' | 'Settings';
 
@@ -78,7 +79,7 @@ export function WelcomeScreen({ pairedDevice, onDeviceReset, onSignOut, onDelete
           </View>
 
           <View style={styles.illustration}>
-            <DeviceIllustration isOn={device.isOn} />
+            <DeviceIllustration isOn={!isProduction && device.isOn} />
           </View>
 
           <Text style={styles.greeting}>{greeting}</Text>
@@ -111,22 +112,29 @@ export function WelcomeScreen({ pairedDevice, onDeviceReset, onSignOut, onDelete
           {/* Tab content */}
           {activeTab === 'Home' && (
             <View style={styles.content}>
-              <StatusCard device={device} />
+              <StatusCard device={device} unavailable={isProduction} />
               <NextAlarmCard />
               <SleepTonightButton />
-              <View style={styles.buttons}>
-                <Button
-                  label={device.isConnected ? 'Disconnect' : 'Connect Device'}
-                  onPress={device.isConnected ? disconnect : connect}
-                  variant="primary"
-                />
-                <Button
-                  label={device.isOn ? 'Turn Off' : 'Turn On'}
-                  onPress={togglePower}
-                  variant="secondary"
-                  style={styles.secondaryBtn}
-                />
-              </View>
+              {isProduction ? (
+                <View style={styles.comingSoonRow}>
+                  <Feather name="bluetooth" size={16} color={colors.text.tertiary} />
+                  <Text style={styles.comingSoonText}>Device pairing and controls are coming soon</Text>
+                </View>
+              ) : (
+                <View style={styles.buttons}>
+                  <Button
+                    label={device.isConnected ? 'Disconnect' : 'Connect Device'}
+                    onPress={device.isConnected ? disconnect : connect}
+                    variant="primary"
+                  />
+                  <Button
+                    label={device.isOn ? 'Turn Off' : 'Turn On'}
+                    onPress={togglePower}
+                    variant="secondary"
+                    style={styles.secondaryBtn}
+                  />
+                </View>
+              )}
             </View>
           )}
 
@@ -274,6 +282,18 @@ const styles = StyleSheet.create({
   },
   secondaryBtn: {
     marginTop: spacing['1'],
+  },
+  comingSoonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing['2'],
+    marginTop: spacing['2'],
+    paddingVertical: spacing['4'],
+  },
+  comingSoonText: {
+    fontSize: typography.sizes.sm,
+    color: colors.text.tertiary,
   },
   settingsContent: {
     paddingHorizontal: spacing['6'],

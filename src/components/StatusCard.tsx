@@ -5,6 +5,7 @@ import { DeviceStatus, ModeLabels } from '../models/Device';
 
 interface Props {
   device: DeviceStatus;
+  unavailable?: boolean;
 }
 
 function StatusRow({ label, value, active }: { label: string; value: string; active?: boolean }) {
@@ -21,7 +22,17 @@ function StatusRow({ label, value, active }: { label: string; value: string; act
   );
 }
 
-export function StatusCard({ device }: Props) {
+export function StatusCard({ device, unavailable }: Props) {
+  if (unavailable) {
+    return (
+      <View style={styles.card}>
+        <StatusRow label="Somnara" value="Not available yet" active={false} />
+        <View style={styles.divider} />
+        <StatusRow label="Device" value="Pairing coming soon" />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.card}>
       <StatusRow

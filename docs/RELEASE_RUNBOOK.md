@@ -22,6 +22,15 @@ configured by committing code:
   required-reviewer protection rule — this **is** the go/no-go gate on
   `.github/workflows/release.yml`; the workflow file only references it,
   it can't create the rule itself.
+- iOS/Android signing credentials for `com.somnara.app`, generated once per
+  platform via `eas credentials` (interactive) — EAS manages the Apple
+  distribution certificate/provisioning profile and the Android keystore
+  itself once you run it; there's no separate manual cert-generation step.
+  Run this before the first `staging` or `production` build.
+- Staging/production Supabase config (`EXPO_PUBLIC_SUPABASE_URL`/`_ANON_KEY`)
+  and the Sentry DSN, set per environment via `eas env:create` — not
+  committed to `eas.json`, which only carries the non-secret
+  `EXPO_PUBLIC_APP_ENV` flag per build profile.
 - Supabase's own Point-in-Time Recovery enabled on the production project
   (Database → Backups) — the real backup safety net. `scripts/backup-db.sh`
   is supplementary, for on-demand snapshots and the rehearsal drill, not a
