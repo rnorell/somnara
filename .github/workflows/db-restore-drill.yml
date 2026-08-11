@@ -1,0 +1,51 @@
+name: DB backup/restore rehearsal drill
+
+# Manual-dispatch only. Runs the actual backup -> restore cycle against a
+# STAGING project on demand, so "rehearsal" is a repeatable, provable CI job
+# rather than just a paragraph in a doc. Never point STAGING_DATABASE_URL at
+# production — this script overwrites the target database.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  drill:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check staging DB is configured
+        id: check
+        run: |
+          if [ -z "${{ secrets.STAGING_DATABASE_URL }}" ]; then
+            echo "::warning::STAGING_DATABASE_URL secret is not set — no staging project configured yet to rehearse against."
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install postgresql-client
+        if: steps.check.outputs.configured == 'true'
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Backup
+        if: steps.check.outputs.configured == 'true'
+        env:
+          DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+        run: ./scripts/backup-db.sh ./backups
+
+      - name: Restore (rehearsal — same staging project, proves the round trip works)
+        if: steps.check.outputs.configured == 'true'
+        env:
+          DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          CONFIRM: '1'
+        run: |
+          DUMP_FILE=$(ls -t ./backups/*.sql | head -n1)
+          ./scripts/restore-db.sh "$DUMP_FILE"
+
+      - name: Upload backup artifact
+        if: steps.check.outputs.configured == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-backup-${{ github.run_id }}
+          path: ./backups/*.sql
+          retention-days: 14

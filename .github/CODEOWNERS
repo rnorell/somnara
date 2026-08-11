@@ -1,0 +1,10 @@
+# A change to the database schema, RLS policies, security-definer
+# functions, security tests, release process, or CI itself always needs
+# review before merging — these are exactly the places a silent mistake
+# turns into a real authorization or deployment incident. See
+# docs/RELEASE_RUNBOOK.md's migration-review checklist for what to check.
+
+/supabase/                 @ricnorell
+/.github/workflows/        @ricnorell
+/.github/CODEOWNERS        @ricnorell
+/eas.json                  @ricnorell

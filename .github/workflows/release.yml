@@ -4,6 +4,14 @@ name: Release build
 # https://expo.dev/accounts/[account]/settings/access-tokens, added under
 # Settings → Secrets and variables → Actions. Exits cleanly with a clear
 # message instead of failing opaquely until that's set.
+#
+# Go/no-go checkpoint: the build job targets the "production" GitHub
+# Environment. Environments support required-reviewer protection rules —
+# the actual gate — which is a one-time manual setup step in this repo's
+# Settings → Environments (not something committable YAML can configure).
+# Until that's set up, `environment:` here is inert (no approval required).
+# See docs/RELEASE_RUNBOOK.md for the full go/no-go checklist a reviewer
+# should check before approving.
 
 on:
   push:
@@ -24,6 +32,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    environment: production
     steps:
       - name: Check EAS token
         id: check-token
