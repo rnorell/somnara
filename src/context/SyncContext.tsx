@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { Alarm } from '../models/Alarm';
 import { storage } from '../lib/storage';
 import { supabase } from '../lib/supabase';
+import { classifyError } from '../lib/errors';
 
 export interface Preferences {
   sunriseDuration: 15 | 30 | 45;
@@ -21,11 +22,6 @@ const DEFAULT_PREFERENCES: Preferences = {
 };
 
 const SYNC_DEBOUNCE_MS = 400;
-
-function isNetworkError(err: unknown): boolean {
-  const message = err instanceof Error ? err.message : String(err ?? '');
-  return /network|fetch/i.test(message);
-}
 
 interface SyncContextValue {
   alarms: Alarm[];
@@ -101,8 +97,9 @@ export function SyncProvider({ userId, children }: Props) {
     pendingRef.current = remaining;
 
     const reason = failed[0][1].reason;
+    const classified = classifyError(reason);
     setLastError(reason instanceof Error ? reason.message : 'Sync failed');
-    setStatus(isNetworkError(reason) ? 'offline' : 'failed');
+    setStatus(classified.kind === 'network' ? 'offline' : 'failed');
     retryFnRef.current = flushPending;
   }
 
@@ -149,7 +146,7 @@ export function SyncProvider({ userId, children }: Props) {
       } catch (e) {
         if (!active) return;
         setLastError(e instanceof Error ? e.message : 'Could not load your data');
-        setStatus(isNetworkError(e) ? 'offline' : 'failed');
+        setStatus(classifyError(e).kind === 'network' ? 'offline' : 'failed');
         retryFnRef.current = load;
       }
     }

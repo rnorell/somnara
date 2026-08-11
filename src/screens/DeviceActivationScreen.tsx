@@ -15,6 +15,7 @@ import { colors, typography, spacing, radii } from '../theme';
 import { PairedDevice } from '../models/Device';
 import { User } from '../state/authStore';
 import { supabase } from '../lib/supabase';
+import { classifyError } from '../lib/errors';
 import { SomnaraLogo } from '../components/SomnaraLogo';
 
 interface Props {
@@ -92,7 +93,18 @@ export function DeviceActivationScreen({ user, onActivated }: Props) {
       p_activation_code: serial.trim(),
       p_name: deviceName.trim().slice(0, 60) || 'My Somnara',
     });
-    if (claimError || !data) {
+    if (claimError) {
+      // A thrown/network-shaped failure means we couldn't verify the code
+      // at all — different from the RPC succeeding and correctly reporting
+      // the code as invalid/already-claimed (data === null, below).
+      const classified = classifyError(claimError);
+      setError(classified.kind === 'network'
+        ? classified.message
+        : 'This device code could not be verified. Check it and try again.');
+      setStep('enter');
+      return;
+    }
+    if (!data) {
       setError('This device code could not be verified. Check it and try again.');
       setStep('enter');
       return;

@@ -2,14 +2,32 @@ import 'react-native-url-polyfill/auto';
 import { AppState, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
-import { createClient, processLock } from '@supabase/supabase-js';
+import { createClient, processLock, type SupabaseClient } from '@supabase/supabase-js';
 
 const url = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
 const publishableKey =
   process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
   process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
 
-export const isSupabaseConfigured = Boolean(url && publishableKey);
+const hasEnv = Boolean(url && publishableKey);
+
+// Absent env vars mean "not configured yet" — the app runs fully offline/
+// local, which is intentional (see .env.example). Present-but-invalid
+// values are a real misconfiguration, distinguished via `configError` so
+// the UI can tell the two apart instead of both silently falling back to
+// the same offline mode.
+function validateUrl(value: string): string | null {
+  try {
+    new URL(value);
+    return null;
+  } catch {
+    return 'The configured Supabase URL is not valid.';
+  }
+}
+
+export let configError: string | null = null;
+
+export const isSupabaseConfigured = hasEnv;
 
 const secureStorage = {
   async getItem(key: string) {
@@ -47,8 +65,15 @@ const secureStorage = {
   },
 };
 
-export const supabase = isSupabaseConfigured
-  ? createClient(url, publishableKey, {
+function createSupabaseClient(): SupabaseClient | null {
+  if (!hasEnv) return null;
+  const urlError = validateUrl(url);
+  if (urlError) {
+    configError = urlError;
+    return null;
+  }
+  try {
+    return createClient(url, publishableKey, {
       auth: {
         storage: Platform.OS === 'web' ? AsyncStorage : secureStorage,
         autoRefreshToken: true,
@@ -60,8 +85,14 @@ export const supabase = isSupabaseConfigured
         flowType: 'pkce',
         lock: processLock,
       },
-    })
-  : null;
+    });
+  } catch (e) {
+    configError = e instanceof Error ? e.message : 'Could not initialize the Supabase client.';
+    return null;
+  }
+}
+
+export const supabase = createSupabaseClient();
 
 if (supabase && Platform.OS !== 'web') {
   AppState.addEventListener('change', state => {

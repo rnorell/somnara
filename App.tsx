@@ -9,12 +9,23 @@ import { WelcomeScreen } from './src/screens/WelcomeScreen';
 import { SyncProvider } from './src/context/SyncContext';
 import { toAppUser, User } from './src/state/authStore';
 import { PairedDevice } from './src/models/Device';
-import { supabase } from './src/lib/supabase';
+import { supabase, configError } from './src/lib/supabase';
 import { storage } from './src/lib/storage';
+import { classifyError } from './src/lib/errors';
 import { useAuthDeepLink } from './src/hooks/useAuthDeepLink';
+import { ErrorBoundary } from './src/components/ErrorBoundary';
+import { StatusScreen } from './src/components/StatusScreen';
 import { colors } from './src/theme';
 
 export default function App() {
+  return (
+    <ErrorBoundary>
+      <AppContent />
+    </ErrorBoundary>
+  );
+}
+
+function AppContent() {
   const [user, setUser] = useState<User | null>(null);
   const [pairedDevice, setPairedDevice] = useState<PairedDevice | null>(null);
   const [onboarded, setOnboarded] = useState(false);
@@ -22,6 +33,10 @@ export default function App() {
   const [deviceLoading, setDeviceLoading] = useState(false);
   const [pendingPasswordRecovery, setPendingPasswordRecovery] = useState(false);
   const [sessionExpiredNotice, setSessionExpiredNotice] = useState('');
+  const [authOutage, setAuthOutage] = useState<string | null>(null);
+  const [deviceOutage, setDeviceOutage] = useState<string | null>(null);
+  const [authRetryTick, setAuthRetryTick] = useState(0);
+  const [deviceRetryTick, setDeviceRetryTick] = useState(0);
   const hadSessionRef = useRef(false);
   const signingOutRef = useRef(false);
   const deepLinkError = useAuthDeepLink();
@@ -33,8 +48,18 @@ export default function App() {
     }
 
     let active = true;
+    setAuthLoading(true);
+    setAuthOutage(null);
     supabase.auth.getUser().then(({ data, error }) => {
       if (!active) return;
+      if (error) {
+        const classified = classifyError(error);
+        if (classified.kind === 'network') {
+          setAuthOutage(classified.message);
+          setAuthLoading(false);
+          return;
+        }
+      }
       setUser(!error && data.user ? toAppUser(data.user) : null);
       setAuthLoading(false);
     });
@@ -64,12 +89,13 @@ export default function App() {
       active = false;
       listener.subscription.unsubscribe();
     };
-  }, []);
+  }, [authRetryTick]);
 
   useEffect(() => {
     if (!supabase || !user) return;
     let active = true;
     setDeviceLoading(true);
+    setDeviceOutage(null);
     supabase
       .from('paired_devices')
       .select('id, serial, name, paired_at')
@@ -77,25 +103,52 @@ export default function App() {
       .maybeSingle()
       .then(({ data, error }) => {
         if (!active) return;
-        if (!error && data) {
-          setPairedDevice({
-            id: data.id,
-            serial: data.serial,
-            name: data.name,
-            pairedAt: data.paired_at,
-            ownerId: user.id,
-            ownerEmail: user.email,
-          });
-        } else {
-          setPairedDevice(null);
+        if (error) {
+          const classified = classifyError(error);
+          if (classified.kind === 'network') {
+            setDeviceOutage(classified.message);
+            setDeviceLoading(false);
+            return;
+          }
         }
+        setPairedDevice(data ? {
+          id: data.id,
+          serial: data.serial,
+          name: data.name,
+          pairedAt: data.paired_at,
+          ownerId: user.id,
+          ownerEmail: user.email,
+        } : null);
         setDeviceLoading(false);
       });
     return () => { active = false; };
-  }, [user]);
+  }, [user, deviceRetryTick]);
+
+  if (configError) {
+    return (
+      <StatusScreen
+        icon="alert-octagon"
+        tone="danger"
+        title="Configuration problem"
+        message={configError}
+      />
+    );
+  }
 
   if (authLoading || deviceLoading) {
     return <View style={styles.loading}><ActivityIndicator color={colors.accent.DEFAULT} /></View>;
+  }
+
+  if (authOutage) {
+    return (
+      <StatusScreen
+        icon="cloud-off"
+        title="Can't connect"
+        message={authOutage}
+        actionLabel="Retry"
+        onAction={() => setAuthRetryTick(t => t + 1)}
+      />
+    );
   }
 
   if (pendingPasswordRecovery) {
@@ -105,6 +158,19 @@ export default function App() {
   if (!user) {
     return <AuthScreen onAuth={setUser} sessionExpiredNotice={deepLinkError ?? (sessionExpiredNotice || undefined)} />;
   }
+
+  if (deviceOutage) {
+    return (
+      <StatusScreen
+        icon="cloud-off"
+        title="Can't connect"
+        message={deviceOutage}
+        actionLabel="Retry"
+        onAction={() => setDeviceRetryTick(t => t + 1)}
+      />
+    );
+  }
+
   if (!pairedDevice) return <DeviceActivationScreen user={user} onActivated={setPairedDevice} />;
   if (!onboarded) return <OnboardingScreen onComplete={() => setOnboarded(true)} />;
 
