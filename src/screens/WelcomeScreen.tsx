@@ -11,6 +11,7 @@ import { AlarmsTab } from '../components/AlarmsTab';
 import { SleepTonightButton } from '../components/SleepTonightButton';
 import { SunriseDurationPicker } from '../components/SunriseDurationPicker';
 import { DeviceOwnershipCard } from '../components/DeviceOwnershipCard';
+import { SyncStatusCard } from '../components/SyncStatusCard';
 import { useGreeting } from '../hooks/useGreeting';
 import { useDeviceStore } from '../state/deviceStore';
 import { useSyncContext } from '../context/SyncContext';
@@ -140,6 +141,9 @@ export function WelcomeScreen({ pairedDevice, onDeviceReset, onSignOut, onDelete
 
           {activeTab === 'Settings' && (
             <View style={styles.settingsContent}>
+              <Text style={styles.settingsSection}>SYNC</Text>
+              <SyncStatusCard />
+              <View style={{ marginTop: spacing['6'] }} />
               <SunriseDurationPicker
                 value={preferences.sunriseDuration}
                 onChange={d => setPreferences({ sunriseDuration: d as 15 | 30 | 45 })}
