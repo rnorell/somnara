@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+
+  expo-doctor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx expo-doctor
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm test -- --ci
+
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Audit dependencies (fails only on critical)
+        run: |
+          npm audit --omit=dev --json > audit.json || true
+          node -e "
+            const a = require('./audit.json');
+            const v = (a.metadata && a.metadata.vulnerabilities) || {};
+            console.log('Vulnerabilities:', JSON.stringify(v));
+            if ((v.critical || 0) > 0) {
+              console.error('Critical vulnerabilities found — failing.');
+              process.exit(1);
+            }
+            if ((v.high || 0) > 0 || (v.moderate || 0) > 0) {
+              console.warn(
+                'High/moderate vulnerabilities present. See SECURITY_AUDIT_REPORT_2026-08-03.md — ' +
+                'the current set is a documented, currently-unfixable chain cascading from Expo\\'s ' +
+                'own xcode build-tool dependency. Not failing the build for these; re-check when ' +
+                'the Expo SDK patch line updates.'
+              );
+            }
+          "
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan for secrets (gitleaks)
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/repo zricethezav/gitleaks:latest \
+            detect --source /repo --no-git -v --redact

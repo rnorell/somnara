@@ -1,0 +1,58 @@
+name: Release build
+
+# Needs a repo secret named EXPO_TOKEN — an Expo access token from
+# https://expo.dev/accounts/[account]/settings/access-tokens, added under
+# Settings → Secrets and variables → Actions. Exits cleanly with a clear
+# message instead of failing opaquely until that's set.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'EAS build profile'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - development
+          - preview
+          - production
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check EAS token
+        id: check-token
+        run: |
+          if [ -z "${{ secrets.EXPO_TOKEN }}" ]; then
+            echo "::warning::EXPO_TOKEN secret is not set — EAS is not configured yet. Add an Expo access token as a repo secret to enable release builds."
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.check-token.outputs.configured == 'true'
+
+      - uses: actions/setup-node@v4
+        if: steps.check-token.outputs.configured == 'true'
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+        if: steps.check-token.outputs.configured == 'true'
+
+      - uses: expo/expo-github-action@v8
+        if: steps.check-token.outputs.configured == 'true'
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: EAS Build
+        if: steps.check-token.outputs.configured == 'true'
+        run: eas build --platform all --profile ${{ github.event.inputs.profile || 'production' }} --non-interactive

@@ -1,0 +1,33 @@
+name: Backend health check
+
+# Supabase's own uptime/health alerts are configured in its dashboard, not
+# expressible as repo code. This is a real, working supplementary check: a
+# failing run trips GitHub's built-in workflow-failure notification email to
+# the repo's watchers. Needs a repo secret named SUPABASE_URL (Settings →
+# Secrets and variables → Actions) — separate from the local .env file.
+# Exits cleanly when unset, so it doesn't red the repo before a real backend
+# exists.
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+jobs:
+  health:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Supabase reachability
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        run: |
+          if [ -z "$SUPABASE_URL" ]; then
+            echo "SUPABASE_URL secret not set — no backend configured yet, skipping."
+            exit 0
+          fi
+          status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$SUPABASE_URL/auth/v1/health")
+          echo "Health endpoint returned HTTP $status"
+          if [ "$status" -lt 200 ] || [ "$status" -ge 500 ]; then
+            echo "::error::Supabase backend appears unreachable or unhealthy (HTTP $status)"
+            exit 1
+          fi

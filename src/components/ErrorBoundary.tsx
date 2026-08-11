@@ -1,5 +1,6 @@
 import React from 'react';
 import { StatusScreen } from './StatusScreen';
+import { captureException } from '../lib/monitoring';
 
 interface Props {
   children: React.ReactNode;
@@ -17,9 +18,10 @@ export class ErrorBoundary extends React.Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
-    // No crash-reporting service is configured in this project — console
-    // logging is the honest current behavior, not a stand-in for telemetry.
     console.error('Unhandled error in render tree:', error, info.componentStack);
+    // No-ops when EXPO_PUBLIC_SENTRY_DSN isn't set — console logging above
+    // is the real, current-state behavior either way.
+    captureException(error, { componentStack: info.componentStack ?? undefined });
   }
 
   reset = () => {

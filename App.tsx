@@ -12,10 +12,13 @@ import { PairedDevice } from './src/models/Device';
 import { supabase, configError } from './src/lib/supabase';
 import { storage } from './src/lib/storage';
 import { classifyError } from './src/lib/errors';
+import { initMonitoring } from './src/lib/monitoring';
 import { useAuthDeepLink } from './src/hooks/useAuthDeepLink';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { StatusScreen } from './src/components/StatusScreen';
 import { colors } from './src/theme';
+
+initMonitoring();
 
 export default function App() {
   return (
