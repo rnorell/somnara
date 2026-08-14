@@ -230,7 +230,7 @@ const styles = StyleSheet.create({
   },
   illustration: {
     alignItems: 'center',
-    paddingTop: spacing['3'],
+    paddingTop: 0,
     paddingBottom: 0,
   },
   tabBar: {
