@@ -227,8 +227,8 @@ function EnterStep({ serial, onChange, onNext, error }: {
         <Feather name="shield" size={28} color={colors.accent.DEFAULT} />
       </View>
       <Text style={styles.stepTitle}>Activate your Somnara</Text>
-      <Text style={styles.stepSubtitle}>
-        Enter the device code printed on the base of your Somnara to confirm ownership.
+      <Text style={styles.stepSubtitle} numberOfLines={1}>
+        Enter your device code to confirm ownership.
       </Text>
 
       {/* Device hint illustration */}
@@ -237,7 +237,7 @@ function EnterStep({ serial, onChange, onNext, error }: {
           <View style={styles.hintDeviceBody} />
           <View style={styles.hintDeviceBase}>
             <View style={styles.hintCodeBox}>
-              <Text style={styles.hintCodeLabel}>SOM-2024-XXXX</Text>
+              <Text style={styles.hintCodeLabel} numberOfLines={1}>SOM-2024-XXXX</Text>
             </View>
           </View>
         </View>
@@ -437,7 +437,7 @@ const styles = StyleSheet.create({
     opacity: 0.3,
   },
   hintDeviceBase: {
-    width: 100, height: 22,
+    width: 140, height: 22,
     backgroundColor: colors.border.strong,
     borderRadius: 4,
     alignItems: 'center', justifyContent: 'center',
@@ -446,6 +446,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     paddingHorizontal: 6, paddingVertical: 2,
     borderRadius: 3,
+    flexShrink: 0,
   },
   hintCodeLabel: {
     fontSize: 9, fontWeight: '700',
