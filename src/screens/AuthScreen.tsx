@@ -11,7 +11,14 @@ import * as Linking from 'expo-linking';
 import { colors, typography, spacing, radii } from '../theme';
 import { toAppUser, User } from '../state/authStore';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
+import { APP_ENV } from '../lib/env';
 import { SomnaraLogo } from '../components/SomnaraLogo';
+
+// Only true in local development with no backend configured — lets you
+// preview the app without a real Supabase project. Never available in
+// staging/production builds, and never used when a backend IS configured
+// (real auth always takes priority).
+const DEV_AUTH_BYPASS = APP_ENV === 'development' && !isSupabaseConfigured;
 
 const AUTH_REDIRECT_URL = Linking.createURL('auth/callback');
 
@@ -110,11 +117,28 @@ export function AuthScreen({ onAuth, sessionExpiredNotice }: Props) {
     setError('');
     setNotice('');
     setAwaitingConfirmation(false);
-    if (!isSupabaseConfigured || !supabase) { setError('Authentication service is not configured.'); return; }
     const normalizedEmail = email.trim().toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) { setError('Please enter a valid email.'); return; }
     if (password.length < 8) { setError('Password must be at least 8 characters.'); return; }
     if (mode === 'signup' && !name.trim()) { setError('Please enter your name.'); return; }
+
+    if (!isSupabaseConfigured || !supabase) {
+      if (DEV_AUTH_BYPASS) {
+        setLoading(true);
+        setTimeout(() => {
+          setLoading(false);
+          onAuth({
+            id: `dev-${normalizedEmail}`,
+            email: normalizedEmail,
+            name: name.trim() || normalizedEmail.split('@')[0],
+            provider: 'email',
+          });
+        }, 400);
+        return;
+      }
+      setError('Authentication service is not configured.');
+      return;
+    }
     setLoading(true);
     try {
       if (mode === 'signup') {
@@ -210,6 +234,15 @@ export function AuthScreen({ onAuth, sessionExpiredNotice }: Props) {
                 ? 'Set up your personal sunrise profile'
                 : "Enter your email and we'll send you a reset link"}
             </Text>
+
+            {DEV_AUTH_BYPASS && (
+              <View style={styles.devBanner}>
+                <Feather name="tool" size={12} color={colors.text.tertiary} />
+                <Text style={styles.devBannerText}>
+                  Dev mode — no backend configured. Any email/password works locally.
+                </Text>
+              </View>
+            )}
 
             {mode !== 'forgot' && (
               <>
@@ -386,6 +419,23 @@ const styles = StyleSheet.create({
     color: colors.text.tertiary,
     textAlign: 'center',
     marginBottom: spacing['8'],
+  },
+  devBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing['2'],
+    backgroundColor: colors.background.card,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing['3'],
+    paddingVertical: spacing['2'],
+    marginTop: -spacing['5'],
+    marginBottom: spacing['5'],
+  },
+  devBannerText: {
+    fontSize: typography.sizes.xs,
+    color: colors.text.tertiary,
+    textAlign: 'center',
   },
   socialRow: {
     flexDirection: 'row',

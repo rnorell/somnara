@@ -14,9 +14,13 @@ import { Feather } from '@expo/vector-icons';
 import { colors, typography, spacing, radii } from '../theme';
 import { PairedDevice } from '../models/Device';
 import { User } from '../state/authStore';
-import { supabase } from '../lib/supabase';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { classifyError } from '../lib/errors';
+import { APP_ENV } from '../lib/env';
 import { SomnaraLogo } from '../components/SomnaraLogo';
+
+// See AuthScreen.tsx — same dev-only, no-backend preview bypass.
+const DEV_AUTH_BYPASS = APP_ENV === 'development' && !isSupabaseConfigured;
 
 interface Props {
   user: User;
@@ -28,6 +32,14 @@ type Step = 'enter' | 'verifying' | 'confirm' | 'success';
 function maskActivationCode(raw: string) {
   const clean = raw.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
   return clean.length > 4 ? `••••-${clean.slice(-4)}` : '••••';
+}
+
+// Dev-bypass-only: turns whatever the user typed into a plausible-looking
+// serial for the fake local device, since there's no real claim_device RPC
+// to return one.
+function formatSerial(raw: string) {
+  const clean = raw.replace(/[^A-Za-z0-9]/g, '').toUpperCase().padEnd(11, '0');
+  return `SOM-${clean.slice(0, 4)}-${clean.slice(4, 8)}`;
 }
 
 function PulsingRing({ delay = 0 }: { delay?: number }) {
@@ -85,6 +97,20 @@ export function DeviceActivationScreen({ user, onActivated }: Props) {
     setError('');
     setStep('verifying');
     if (!supabase) {
+      if (DEV_AUTH_BYPASS) {
+        setTimeout(() => {
+          setClaimedDevice({
+            id: `dev-device-${Date.now()}`,
+            serial: formatSerial(serial),
+            name: deviceName.trim() || 'My Somnara',
+            pairedAt: new Date().toISOString(),
+            ownerId: user.id,
+            ownerEmail: user.email,
+          });
+          setStep('confirm');
+        }, 800);
+        return;
+      }
       setError('Secure device activation is not configured.');
       setStep('enter');
       return;
@@ -123,12 +149,24 @@ export function DeviceActivationScreen({ user, onActivated }: Props) {
   }
 
   async function handlePair() {
-    if (!supabase || !claimedDevice) {
+    if (!claimedDevice) {
       setError('Secure device activation did not complete.');
       setStep('enter');
       return;
     }
     const name = deviceName.trim().slice(0, 60) || 'My Somnara';
+
+    if (!supabase) {
+      if (DEV_AUTH_BYPASS) {
+        setStep('success');
+        setTimeout(() => { onActivated({ ...claimedDevice, name }); }, 2000);
+        return;
+      }
+      setError('Secure device activation did not complete.');
+      setStep('enter');
+      return;
+    }
+
     const { error: updateError } = await supabase
       .from('paired_devices')
       .update({ name })
@@ -151,6 +189,15 @@ export function DeviceActivationScreen({ user, onActivated }: Props) {
           <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
             <SomnaraLogo />
+
+            {DEV_AUTH_BYPASS && (
+              <View style={styles.devBanner}>
+                <Feather name="tool" size={12} color={colors.text.tertiary} />
+                <Text style={styles.devBannerText}>
+                  Dev mode — any device code (8+ characters) will pair a fake local device.
+                </Text>
+              </View>
+            )}
 
             {step === 'enter' && <EnterStep serial={serial} onChange={handleSerialChange} onNext={handleActivate} error={error} />}
             {step === 'verifying' && <VerifyingStep serial={maskActivationCode(serial)} />}
@@ -323,6 +370,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing['6'],
     paddingBottom: spacing['10'],
     alignItems: 'center',
+  },
+  devBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing['2'],
+    backgroundColor: colors.background.card,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing['3'],
+    paddingVertical: spacing['2'],
+    marginBottom: spacing['4'],
+  },
+  devBannerText: {
+    fontSize: typography.sizes.xs,
+    color: colors.text.tertiary,
+    textAlign: 'center',
+    flexShrink: 1,
   },
   stepContainer: {
     width: '100%',
