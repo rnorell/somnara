@@ -103,7 +103,7 @@ function PowerOnStep({ onNext }: { onNext: () => void }) {
             <Text style={s.stepTitle}>Turn on your Somnara</Text>
           </FadeIn>
           <FadeIn delay={500}>
-            <Text style={s.stepSub}>Hold the button on the back of your device for two seconds until the light glows softly.</Text>
+            <Text style={s.stepSub}>{'Hold the button on the back of your device\nfor two seconds until the light glows softly.'}</Text>
           </FadeIn>
           <FadeIn delay={700}>
             <TouchableOpacity style={s.nextBtn} onPress={onNext} activeOpacity={0.85}>

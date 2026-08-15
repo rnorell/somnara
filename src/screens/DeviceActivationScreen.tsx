@@ -263,7 +263,7 @@ function EnterStep({ serial, onChange, onNext, error }: {
         <Feather name="arrow-right" size={18} color="#fff" />
       </TouchableOpacity>
 
-      <Text style={styles.legalNote}>
+      <Text style={styles.legalNoteOneLine} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>
         This links the device exclusively to your account. You can transfer ownership at any time in Settings.
       </Text>
     </View>
@@ -504,6 +504,14 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     opacity: 0.7,
     paddingHorizontal: spacing['2'],
+  },
+  legalNoteOneLine: {
+    fontSize: typography.sizes.xs,
+    color: colors.text.tertiary,
+    textAlign: 'center',
+    opacity: 0.7,
+    paddingHorizontal: spacing['1'],
+    width: '100%',
   },
 
   // Verifying rings
