@@ -65,9 +65,6 @@ function WelcomeStep({ onNext }: { onNext: () => void }) {
           <FadeIn delay={100}>
             <Image source={require('../../assets/logo.png')} style={s.welcomeLogo} resizeMode="contain" tintColor={colors.accent.DEFAULT} />
           </FadeIn>
-          <FadeIn delay={500}>
-            <Text style={s.welcomeTagline}>RISE GENTLY. LIVE FULLY.</Text>
-          </FadeIn>
           <FadeIn delay={900}>
             <Text style={s.welcomeSub}>
               Your light-based alarm clock that wakes you{'\n'}with a gentle, natural sunrise.
@@ -379,14 +376,6 @@ const s = StyleSheet.create({
   welcomeLogo: {
     width: W * 0.75,
     height: W * 0.4,
-  },
-  welcomeTagline: {
-    fontSize: typography.sizes.xs,
-    fontWeight: typography.weights.semibold,
-    letterSpacing: typography.letterSpacing.widest,
-    color: colors.accent.dark,
-    textAlign: 'center',
-    marginTop: -spacing['3'],
   },
   welcomeSub: {
     fontSize: typography.sizes.base,
