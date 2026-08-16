@@ -1,7 +1,7 @@
 import { View, Image, Dimensions } from 'react-native';
 import { colors, radii, spacing } from '../theme';
 
-const ASPECT_RATIO = 4179 / 830;
+const ASPECT_RATIO = 4179 / 988;
 const WIDTH = Math.min(Dimensions.get('window').width * 0.64, 260);
 const HEIGHT = WIDTH / ASPECT_RATIO;
 
