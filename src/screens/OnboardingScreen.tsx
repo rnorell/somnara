@@ -603,7 +603,7 @@ const s = StyleSheet.create({
     borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.background.card,
+    backgroundColor: colors.border.strong,
     borderWidth: 1,
     borderColor: colors.border.DEFAULT,
   },
@@ -614,7 +614,7 @@ const s = StyleSheet.create({
   dayChipTxt: {
     fontSize: typography.sizes.sm,
     fontWeight: typography.weights.medium,
-    color: colors.text.secondary,
+    color: colors.text.primary,
   },
   dayChipTxtOn: {
     color: colors.text.inverse,
