@@ -416,7 +416,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: typography.sizes.sm,
-    color: colors.text.tertiary,
+    color: colors.text.secondary,
     textAlign: 'center',
     marginBottom: spacing['8'],
   },
