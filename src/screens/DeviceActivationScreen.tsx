@@ -34,14 +34,6 @@ function maskActivationCode(raw: string) {
   return clean.length > 4 ? `••••-${clean.slice(-4)}` : '••••';
 }
 
-// Dev-bypass-only: turns whatever the user typed into a plausible-looking
-// serial for the fake local device, since there's no real claim_device RPC
-// to return one.
-function formatSerial(raw: string) {
-  const clean = raw.replace(/[^A-Za-z0-9]/g, '').toUpperCase().padEnd(11, '0');
-  return `SOM-${clean.slice(0, 4)}-${clean.slice(4, 8)}`;
-}
-
 function PulsingRing({ delay = 0 }: { delay?: number }) {
   const scale = useSharedValue(0.6);
   const opacity = useSharedValue(0.6);
@@ -101,7 +93,7 @@ export function DeviceActivationScreen({ user, onActivated }: Props) {
         setTimeout(() => {
           setClaimedDevice({
             id: `dev-device-${Date.now()}`,
-            serial: formatSerial(serial),
+            serial,
             name: deviceName.trim() || 'My Somnara',
             pairedAt: new Date().toISOString(),
             ownerId: user.id,
