@@ -12,6 +12,7 @@ import { SleepTonightButton } from '../components/SleepTonightButton';
 import { SunriseDurationPicker } from '../components/SunriseDurationPicker';
 import { DeviceOwnershipCard } from '../components/DeviceOwnershipCard';
 import { SyncStatusCard } from '../components/SyncStatusCard';
+import { ClockReliabilityWarning } from '../components/ClockReliabilityWarning';
 import { useGreeting } from '../hooks/useGreeting';
 import { useDeviceStore } from '../state/deviceStore';
 import { useSyncContext } from '../context/SyncContext';
@@ -112,6 +113,7 @@ export function WelcomeScreen({ pairedDevice, onDeviceReset, onSignOut, onDelete
           {/* Tab content */}
           {activeTab === 'Home' && (
             <View style={styles.content}>
+              {device.clockValidity === 'invalid' && <ClockReliabilityWarning />}
               <StatusCard device={device} unavailable={isProduction} />
               <NextAlarmCard />
               <SleepTonightButton />

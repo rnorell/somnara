@@ -23,6 +23,18 @@ export interface DeviceStatus {
   mode: DeviceMode;
   brightness: number;
   alarmTime: string | null;
+  volume: number;
+  activeSoundId: number;
+  playbackState: 'stopped' | 'playing' | 'unknown';
+  clockValidity: 'valid' | 'invalid' | 'unknown';
+  storedAlarmCount: number;
+  firmwareVersion: string | null;
+  hardwareVersion: string | null;
+  ota: {
+    state: 'idle' | 'checking' | 'transferring' | 'verifying' | 'restarting' | 'complete' | 'failed';
+    progress: number;
+    errorCode: string | null;
+  };
 }
 
 export const ModeLabels: Record<DeviceMode, string> = {

@@ -3,7 +3,7 @@ import { Workbook, SpreadsheetFile } from '@oai/artifact-tool';
 
 const outputDir = 'C:/Users/adver/OneDrive/Documents/somnara/outputs/019ff51a-ef33-7a13-a6f1-06956f304455';
 const previewDir = `${outputDir}/previews`;
-const outputPath = `${outputDir}/Somnara_BLE_Protocol_v0.9_for_review.xlsx`;
+const outputPath = `${outputDir}/Somnara_BLE_Protocol_v0.10_for_manufacturer.xlsx`;
 await fs.mkdir(previewDir, { recursive: true });
 
 const wb = Workbook.create();
@@ -34,16 +34,16 @@ function widths(sheet, values) {
 }
 
 const overview = wb.worksheets.add('Overview');
-title(overview, 'Somnara BLE Protocol v0.9', 'PROPOSED FOR MANUFACTURER REVIEW — not approved for production until all items on Open Confirmations are closed.', 7);
+title(overview, 'Somnara BLE Protocol v0.10', 'MANUFACTURER ALIGNMENT DRAFT — confirmed reference values are separated from Somnara proposals and required manufacturer values.', 7);
 overview.getRange('A4:B12').values = [
   ['Field', 'Value'],
   ['Product / advertising name', 'Somnara'],
-  ['Protocol version', '0.9 review draft'],
+  ['Protocol version', '0.10 manufacturer alignment draft'],
   ['App release scope', 'One claimed device per account; protocol identity is future-ready for more devices'],
   ['Stored alarm capacity', '10 alarms'],
   ['Audio capacity', '25 supplied audio files plus Sound ID 0 = Off'],
-  ['Security', 'BLE Secure Connections bonding with printed six-digit passkey'],
-  ['Offline behavior', 'RTC and last committed alarm set must work without a connected phone'],
+  ['Security', 'Secure BLE bonding required; manufacturer must confirm the supported authenticated method'],
+  ['Offline behavior', 'RTC and the last committed alarm set must continue without a connected phone; RTC retention is a launch requirement'],
   ['OTA', 'Required before launch; supplier must complete the OTA sheet'],
 ];
 header(overview.getRange('A4:B4')); body(overview.getRange('A5:B12'));
@@ -110,12 +110,12 @@ frame.getRange('A14:A18').values = [
 widths(frame, { A: 90, B: 150, C: 90, D: 120, E: 210, F: 300, G: 160, H: 180 });
 
 const commands = wb.worksheets.add('Commands');
-title(commands, 'App → Device Commands', 'Opcode allocations marked Proposed require written manufacturer approval before protocol v1.0.', 8);
+title(commands, 'App → Device Commands', 'Reference commands are separated from Somnara extensions. The manufacturer must confirm every final byte layout.', 8);
 commands.getRange('A4:H18').values = [
   ['Opcode (hex)', 'Command', 'Payload bytes from offset 4', 'Length', 'Response', 'App mapping', 'Offline effect', 'Status'],
   ["'0x04", 'Set CCT', 'mode=1, index=3, W, WW, inverseBrightness', 10, 'ACK + status', 'Colour temperature', 'Persists current light state', 'Adapted from demo'],
   ["'0x05", 'Set power', 'state: 1=On, 2=Off', 6, 'ACK + status', 'Power button', 'Persists current power state', 'From demo'],
-  ["'0x07", 'Set brightness', 'percent 0–100, inverse=round(255-percent×255/100)', 7, 'ACK + status', 'Brightness', 'Persists current brightness', '0–100% contract'],
+  ["'0x07", 'Set brightness', 'byte4 percent 0–100; byte5 inverseRaw=round(255-percent×255/100)', 7, 'ACK + status', 'Brightness', 'Persists current brightness', 'Confirmed reference pattern; rounding confirmation required'],
   ["'0x08", 'Set volume', 'percent 0–100', 6, 'ACK + status', 'Alarm volume', 'Persists default preview volume', '0–100% contract'],
   ["'0x09", 'Audio control', 'action: 0=Stop, 1=Preview; soundId 0–25; volume 0–100', 8, 'ACK + audio state', 'Sound selection and preview', 'No alarm change', 'Proposed'],
   ["'0x13", 'Get status', 'queryToken 0–254, marker=0xAA', 7, 'Status event', 'Connection refresh', 'Read only', 'Adapted from demo'],
@@ -170,29 +170,29 @@ const audio = wb.worksheets.add('Audio Map');
 title(audio, 'Audio File Map — 25 Supplied Files', 'Sound ID 0 is always Off. Manufacturer must map every supplied audio file to one stable ID and confirm the exact file identity.', 8);
 const audioRows = [['Sound ID', 'App display name', 'Manufacturer filename', 'Duration (s)', 'Format / sample rate', 'SHA-256', 'Loop behavior', 'Confirmation status']];
 audioRows.push([0, 'Off', 'No file', 0, '—', '—', 'Silent', 'Fixed']);
-for (let i = 1; i <= 25; i++) audioRows.push([i, `Audio ${String(i).padStart(2, '0')} — name required`, '', null, '', '', 'Manufacturer to confirm', 'OPEN']);
+for (let i = 1; i <= 25; i++) audioRows.push([i, `Audio ${String(i).padStart(2, '0')} — name required`, '', null, '', '', 'Manufacturer to confirm', 'Manufacturer value required']);
 audio.getRange(`A4:H${3 + audioRows.length}`).values = audioRows;
 header(audio.getRange('A4:H4')); body(audio.getRange(`A5:H${3 + audioRows.length}`));
-audio.getRange('H5:H30').conditionalFormats.add('containsText', { text: 'OPEN', format: { fill: red, font: { bold: true, color: '#9C0006' } } });
+audio.getRange('H5:H30').conditionalFormats.add('containsText', { text: 'Manufacturer value required', format: { fill: red, font: { bold: true, color: '#9C0006' } } });
 audio.getRange('H5:H30').conditionalFormats.add('containsText', { text: 'Fixed', format: { fill: green, font: { bold: true, color: '#375623' } } });
 audio.getRange('A5:A30').format.numberFormat = '0'; audio.getRange('D5:D30').format.numberFormat = '0.0';
-audio.getRange('H6:H30').dataValidation = { rule: { type: 'list', values: ['OPEN', 'CONFIRMED', 'FILE MISMATCH'] } };
+audio.getRange('H6:H30').dataValidation = { rule: { type: 'list', values: ['Manufacturer value required', 'Confirmed by manufacturer', 'File mismatch'] } };
 widths(audio, { A: 85, B: 240, C: 260, D: 100, E: 190, F: 390, G: 180, H: 160 }); audio.freezePanes.freezeRows(4);
 
 const notify = wb.worksheets.add('Notifications');
-title(notify, 'Device → App Notifications', 'The manufacturer did not supply these payloads. This proposed format must be confirmed and implemented.', 8);
+title(notify, 'MCU → App Reports', 'The reference file does not contain the complete MCU uplink table. These required reports need manufacturer byte layouts.', 8);
 notify.getRange('A4:H14').values = [
   ['Opcode (hex)', 'Event', 'Payload bytes from offset 4', 'Sequence', 'When sent', 'App action', 'Max length', 'Status'],
   ["'0x7F", 'ACK / error', 'requestOpcode, resultCode, detail', 'Copies request', 'For every valid or rejected command', 'Complete, retry, or show error', 8, 'Proposed'],
-  ["'0x13", 'Status', 'power, brightness, cctW, cctWW, volume, activeSoundId, clockValid, alarmCount, flags', 'Request sequence or 0xFF', 'After query and state change', 'Update live device state', 15, 'Proposed'],
+  ["'0x13", 'Status', 'power, brightnessPercent 0–100, cctW, cctWW, volumePercent 0–100, activeSoundId, playbackState, clockValid, alarmCount, flags', 'Request sequence or 0xFF', 'After query and state change', 'Update live device state', 'Manufacturer to define', 'Manufacturer value required'],
   ["'0x18", 'Alarm record', 'Same alarm payload as offsets 4–16 of 0x17', 'Read request sequence', 'One event per occupied slot', 'Build device alarm set', 18, 'Proposed'],
   ["'0x18", 'Alarm list end', 'recordType=0xFF, revision uint16, count, listChecksum', 'Read request sequence', 'After final record', 'Validate complete list', 10, 'Proposed'],
   ["'0x09", 'Audio state', 'state: stopped/playing; soundId; volume', 'Request or 0xFF', 'Audio starts, stops, or fails', 'Update preview UI', 8, 'Proposed'],
   ["'0x70", 'Alarm fired', 'index, phase: sunrise/sound/dismissed, timestamp', '0xFF', 'Alarm phase changes', 'Update UI if connected', 12, 'Proposed'],
   ["'0x71", 'Clock invalid', 'reason, lastValid timestamp if available', '0xFF', 'RTC is invalid', 'Set RTC and verify status', 12, 'Proposed'],
   ["'0x72", 'Device reset', 'reason, reset counter', '0xFF', 'Boot or factory reset', 'Refresh full state', 9, 'Proposed'],
-  ["'0x73", 'OTA progress', 'state, percent, error', '0xFF', 'During OTA', 'Update OTA screen', 8, 'Open: align with bootloader'],
-  ["'0x74", 'Button event', 'buttonId, action', '0xFF', 'Physical control changes state', 'Refresh affected state', 7, 'Optional / open'],
+  ["'0x73", 'OTA progress', 'state, percent, error', '0xFF', 'During OTA', 'Update OTA screen', 'Manufacturer to define', 'Manufacturer value required'],
+  ["'0x74", 'Button event', 'buttonId, action', '0xFF', 'Physical control changes state', 'Refresh affected state', 'Manufacturer to define', 'Proposed by Somnara'],
 ];
 header(notify.getRange('A4:H4')); body(notify.getRange('A5:H14')); notify.getRange('H5:H14').format.fill = amber;
 widths(notify, { A: 80, B: 150, C: 390, D: 160, E: 240, F: 240, G: 90, H: 200 });
@@ -225,7 +225,7 @@ security.getRange('A4:F14').values = [
   ['Stage', 'Device behavior', 'App behavior', 'Required control', 'Failure behavior', 'Status'],
   ['Factory state', 'Advertise Somnara service; control characteristics locked', 'Scan by service UUID', 'No control before secure setup', 'Ignore unauthenticated commands', 'Proposed'],
   ['Pairing window', 'Two-second rear-button hold opens window for two minutes', 'Show nearby eligible device IDs', 'Physical presence', 'Window closes automatically', 'Proposed'],
-  ['Passkey', 'Use printed six-digit passkey', 'User enters or scans passkey', 'LE Secure Connections authenticated pairing', 'Rate-limit failed attempts', 'Approved choice / firmware open'],
+  ['Authentication', 'Use the strongest authenticated bonding method supported by the hardware', 'App follows the confirmed pairing flow', 'LE Secure Connections preferred', 'Rate-limit failed attempts', 'Manufacturer value required'],
   ['Bonded use', 'Allow encrypted authenticated GATT access', 'Reconnect with stored bond', 'No plaintext control', 'Prompt secure re-pair', 'Proposed'],
   ['Wrong account', 'BLE bond does not change cloud ownership', 'Cloud claim remains required', 'Activation code stays separate', 'Do not expose account data over BLE', 'Proposed'],
   ['Bond removal', 'Rear-button factory reset clears bonds and settings after confirmation gesture', 'Unlink does not claim physical reset', 'Prevent remote ownership takeover', 'Device enters setup state', 'Proposed'],
@@ -268,7 +268,7 @@ features.getRange('G5:G23').conditionalFormats.add('containsText', { text: 'OPEN
 widths(features, { A: 190, B: 125, C: 470, D: 310, E: 180, F: 280, G: 130 }); features.freezePanes.freezeRows(4);
 
 const ota = wb.worksheets.add('OTA Requirements');
-title(ota, 'BLE OTA — Launch Requirement', 'Manufacturer must complete every OPEN value. Do not infer OTA details from “dual backup” alone.', 6);
+title(ota, 'BLE OTA — Release 1 Requirement', 'Manufacturer must provide every missing technical value. Dual-bank support alone is not a complete app integration protocol.', 6);
 ota.getRange('A4:F20').values = [
   ['Requirement', 'Required result', 'Manufacturer value', 'Evidence / test', 'Release gate', 'Status'],
   ['OTA service UUID', 'Dedicated service or documented reuse', '', 'GATT capture', 'Required', 'OPEN'],
@@ -320,7 +320,7 @@ tests.getRange('G5:G22').conditionalFormats.add('containsText', { text: 'FAIL', 
 widths(tests, { A: 60, B: 100, C: 300, D: 390, E: 100, F: 250, G: 110 }); tests.freezePanes.freezeRows(4);
 
 const open = wb.worksheets.add('Open Confirmations');
-title(open, 'Open Confirmations Before Protocol v1.0', 'Manufacturer must answer each item in writing. Somnara will review and freeze the approved values.', 6);
+title(open, 'Manufacturer Confirmations Before Protocol v1.0', 'Manufacturer must answer each item in writing. Somnara will review and freeze the approved values.', 6);
 open.getRange('A4:F21').values = [
   ['ID', 'Confirmation required', 'Why it matters', 'Manufacturer response', 'Somnara decision', 'Status'],
   ['C01', 'Confirm common frame length, sequence, SUM8 range, timeout, duplicate handling, and maximum payload', 'Reliable command transport', '', '', 'OPEN'],
@@ -331,7 +331,7 @@ open.getRange('A4:F21').values = [
   ['C06', 'Map all 25 supplied audio files to Sound IDs 1–25 with names and SHA-256', 'Stable app-to-firmware audio mapping', '', '', 'OPEN'],
   ['C07', 'Confirm audio format, sample rate, volume curve, loop behavior, and simultaneous light/audio behavior', 'Consistent wake experience', '', '', 'OPEN'],
   ['C08', 'Confirm advertising service data and unique Device ID generation', 'Reliable discovery near several devices', '', '', 'OPEN'],
-  ['C09', 'Confirm LE Secure Connections passkey support, pairing window, rate limit, key storage, and factory reset', 'Prevents unauthorized control', '', '', 'OPEN'],
+  ['C09', 'Confirm the supported secure bonding method, pairing window, rate limit, key storage, and factory-reset bond removal', 'Prevents unauthorized control', '', '', 'OPEN'],
   ['C10', 'Provide serial, hardware revision, and firmware revision reads', 'Support and OTA compatibility', '', '', 'OPEN'],
   ['C11', 'Complete every OTA requirement and provide test firmware', 'OTA is required before launch', '', '', 'OPEN'],
   ['C12', 'Provide reference app, SDK/sample code, protocol traces, or test utility', 'Reduces interpretation risk', '', '', 'OPEN'],
@@ -345,6 +345,29 @@ header(open.getRange('A4:F4')); body(open.getRange('A5:F21')); open.getRange('F5
 open.getRange('F5:F21').conditionalFormats.add('containsText', { text: 'OPEN', format: { fill: red, font: { bold: true, color: '#9C0006' } } });
 open.getRange('F5:F21').conditionalFormats.add('containsText', { text: 'CONFIRMED', format: { fill: green, font: { bold: true, color: '#375623' } } });
 widths(open, { A: 60, B: 430, C: 330, D: 360, E: 300, F: 140 }); open.freezePanes.freezeRows(4);
+
+// v0.10 status language: an unanswered value is not an unavailable feature.
+for (const sheet of wb.worksheets.items) {
+  const used = sheet.getUsedRange();
+  const values = used.values;
+  if (!values) continue;
+  used.values = values.map(row => row.map(value => {
+    if (value === 'OPEN') return 'Manufacturer value required';
+    if (value === 'CONFIRMED') return 'Confirmed by manufacturer';
+    if (value === 'FUTURE' || value === 'EXCLUDED') return 'Not in release 1';
+    if (typeof value === 'string') {
+      return value
+        .replaceAll('Open Confirmations', 'Manufacturer Confirmations')
+        .replaceAll('every OPEN value', 'every missing manufacturer value')
+        .replaceAll('Optional / open', 'Proposed by Somnara')
+        .replaceAll('Open: align with bootloader', 'Manufacturer value required');
+    }
+    return value;
+  }));
+}
+audio.getRange('H6:H30').dataValidation = { rule: { type: 'list', values: ['Manufacturer value required', 'Confirmed by manufacturer', 'File mismatch'] } };
+features.getRange('G5:G23').dataValidation = { rule: { type: 'list', values: ['Manufacturer value required', 'Confirmed by manufacturer', 'Not in release 1'] } };
+open.getRange('F5:F21').dataValidation = { rule: { type: 'list', values: ['Manufacturer value required', 'Confirmed by manufacturer', 'Proposed by Somnara', 'Not in release 1'] } };
 
 const check = await wb.inspect({ kind: 'table', sheetId: 'Audio Map', range: 'A4:H30', include: 'values,formulas', tableMaxRows: 30, tableMaxCols: 8, maxChars: 9000 });
 console.log(check.ndjson);

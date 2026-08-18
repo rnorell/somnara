@@ -26,9 +26,9 @@ export function StatusCard({ device, unavailable }: Props) {
   if (unavailable) {
     return (
       <View style={styles.card}>
-        <StatusRow label="Somnara" value="Not available yet" active={false} />
+        <StatusRow label="Somnara" value="Integration pending" active={false} />
         <View style={styles.divider} />
-        <StatusRow label="Device" value="Pairing coming soon" />
+        <StatusRow label="Device" value="Firmware confirmation required" />
       </View>
     );
   }
