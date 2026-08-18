@@ -11,6 +11,7 @@ import * as Crypto from 'expo-crypto';
 import { colors, typography, spacing, radii } from '../theme';
 import { Alarm } from '../models/Alarm';
 import { useSyncContext } from '../context/SyncContext';
+import { SunriseDurationPicker } from './SunriseDurationPicker';
 
 const DAY_LABELS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 const WEEKDAYS = [1, 2, 3, 4, 5];
@@ -52,13 +53,18 @@ function AlarmToggle({ value, onToggle }: { value: boolean; onToggle: () => void
   );
 }
 
-function AlarmCard({ alarm, onToggle, onDelete }: {
+function AlarmCard({ alarm, onToggle, onDelete, onEdit }: {
   alarm: Alarm;
   onToggle: () => void;
   onDelete: () => void;
+  onEdit: () => void;
 }) {
   return (
-    <View style={[styles.alarmCard, !alarm.enabled && styles.alarmCardDim]}>
+    <TouchableOpacity
+      style={[styles.alarmCard, !alarm.enabled && styles.alarmCardDim]}
+      onPress={onEdit}
+      activeOpacity={0.8}
+    >
       <View style={styles.alarmCardLeft}>
         <Text style={[styles.alarmTime, !alarm.enabled && styles.alarmTimeDim]}>
           {formatTime(alarm.hour, alarm.minute)}
@@ -68,11 +74,14 @@ function AlarmCard({ alarm, onToggle, onDelete }: {
       </View>
       <View style={styles.alarmCardRight}>
         <AlarmToggle value={alarm.enabled} onToggle={onToggle} />
+        <TouchableOpacity onPress={onEdit} hitSlop={12} style={styles.deleteBtn}>
+          <Feather name="edit-2" size={14} color={colors.text.tertiary} />
+        </TouchableOpacity>
         <TouchableOpacity onPress={onDelete} hitSlop={12} style={styles.deleteBtn}>
           <Feather name="trash-2" size={14} color={colors.text.tertiary} />
         </TouchableOpacity>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 
@@ -96,30 +105,59 @@ function TimeSpinner({ value, min, max, onChange }: {
 }
 
 export function AlarmsTab() {
-  const { alarms, setAlarms } = useSyncContext();
-  const [adding, setAdding] = useState(false);
-  const [newHour, setNewHour] = useState(7);
-  const [newMinute, setNewMinute] = useState(0);
-  const [newDays, setNewDays] = useState<number[]>(WEEKDAYS);
+  const { alarms, setAlarms, preferences } = useSyncContext();
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [formHour, setFormHour] = useState(7);
+  const [formMinute, setFormMinute] = useState(0);
+  const [formDays, setFormDays] = useState<number[]>(WEEKDAYS);
+  const [formSunrise, setFormSunrise] = useState<15 | 30 | 45>(preferences.sunriseDuration);
 
   const toggleDay = (d: number) => {
-    setNewDays(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d]);
+    setFormDays(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d]);
+  };
+
+  const openAddForm = () => {
+    setEditingId(null);
+    setFormHour(7);
+    setFormMinute(0);
+    setFormDays(WEEKDAYS);
+    setFormSunrise(preferences.sunriseDuration);
+    setFormOpen(true);
+  };
+
+  const openEditForm = (alarm: Alarm) => {
+    setEditingId(alarm.id);
+    setFormHour(alarm.hour);
+    setFormMinute(alarm.minute);
+    setFormDays(alarm.days);
+    setFormSunrise(alarm.sunriseDuration ?? preferences.sunriseDuration);
+    setFormOpen(true);
+  };
+
+  const closeForm = () => {
+    setFormOpen(false);
+    setEditingId(null);
   };
 
   const saveAlarm = () => {
-    if (newDays.length === 0) return;
-    setAlarms([...alarms, {
-      id: Crypto.randomUUID(),
-      hour: newHour,
-      minute: newMinute,
-      days: [...newDays].sort(),
-      enabled: true,
-      label: '',
-    }]);
-    setAdding(false);
-    setNewHour(7);
-    setNewMinute(0);
-    setNewDays(WEEKDAYS);
+    if (formDays.length === 0) return;
+    if (editingId) {
+      setAlarms(alarms.map(a => a.id === editingId
+        ? { ...a, hour: formHour, minute: formMinute, days: [...formDays].sort(), sunriseDuration: formSunrise }
+        : a));
+    } else {
+      setAlarms([...alarms, {
+        id: Crypto.randomUUID(),
+        hour: formHour,
+        minute: formMinute,
+        days: [...formDays].sort(),
+        enabled: true,
+        label: '',
+        sunriseDuration: formSunrise,
+      }]);
+    }
+    closeForm();
   };
 
   const toggleAlarm = (id: string) => {
@@ -128,6 +166,7 @@ export function AlarmsTab() {
 
   const deleteAlarm = (id: string) => {
     setAlarms(alarms.filter(a => a.id !== id));
+    if (editingId === id) closeForm();
   };
 
   return (
@@ -139,33 +178,34 @@ export function AlarmsTab() {
           alarm={alarm}
           onToggle={() => toggleAlarm(alarm.id)}
           onDelete={() => deleteAlarm(alarm.id)}
+          onEdit={() => openEditForm(alarm)}
         />
       ))}
 
-      {alarms.length === 0 && !adding && (
+      {alarms.length === 0 && !formOpen && (
         <View style={styles.empty}>
           <Feather name="clock" size={32} color={colors.text.tertiary} />
           <Text style={styles.emptyText}>No alarms yet</Text>
         </View>
       )}
 
-      {/* Add alarm form */}
-      {adding && (
+      {/* Add/edit alarm form */}
+      {formOpen && (
         <View style={styles.addForm}>
-          <Text style={styles.formTitle}>NEW ALARM</Text>
+          <Text style={styles.formTitle}>{editingId ? 'EDIT ALARM' : 'NEW ALARM'}</Text>
 
           {/* Time picker */}
           <View style={styles.timePicker}>
-            <TimeSpinner value={newHour} min={0} max={23} onChange={setNewHour} />
+            <TimeSpinner value={formHour} min={0} max={23} onChange={setFormHour} />
             <Text style={styles.colon}>:</Text>
-            <TimeSpinner value={newMinute} min={0} max={59} onChange={setNewMinute} />
+            <TimeSpinner value={formMinute} min={0} max={59} onChange={setFormMinute} />
           </View>
 
           {/* Day selector */}
           <Text style={styles.daysTitle}>REPEAT</Text>
           <View style={styles.daysRow}>
             {DAY_LABELS.map((label, i) => {
-              const on = newDays.includes(i);
+              const on = formDays.includes(i);
               return (
                 <TouchableOpacity
                   key={i}
@@ -181,29 +221,32 @@ export function AlarmsTab() {
             })}
           </View>
 
+          {/* Sunrise duration */}
+          <SunriseDurationPicker value={formSunrise} onChange={d => setFormSunrise(d as 15 | 30 | 45)} />
+
           {/* Actions */}
           <View style={styles.formActions}>
             <TouchableOpacity
               style={styles.cancelFormBtn}
-              onPress={() => setAdding(false)}
+              onPress={closeForm}
               activeOpacity={0.7}
             >
               <Text style={styles.cancelFormText}>Cancel</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.saveBtn, newDays.length === 0 && styles.saveBtnDisabled]}
+              style={[styles.saveBtn, formDays.length === 0 && styles.saveBtnDisabled]}
               onPress={saveAlarm}
               activeOpacity={0.8}
             >
-              <Text style={styles.saveBtnText}>Save Alarm</Text>
+              <Text style={styles.saveBtnText}>{editingId ? 'Save Changes' : 'Save Alarm'}</Text>
             </TouchableOpacity>
           </View>
         </View>
       )}
 
       {/* Add alarm button */}
-      {!adding && (
-        <TouchableOpacity style={styles.addBtn} onPress={() => setAdding(true)} activeOpacity={0.8}>
+      {!formOpen && (
+        <TouchableOpacity style={styles.addBtn} onPress={openAddForm} activeOpacity={0.8}>
           <Feather name="plus" size={18} color={colors.text.inverse} />
           <Text style={styles.addBtnText}>Add Alarm</Text>
         </TouchableOpacity>
