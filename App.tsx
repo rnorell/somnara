@@ -175,7 +175,6 @@ function AppContent() {
   }
 
   if (!pairedDevice) return <DeviceActivationScreen user={user} onActivated={setPairedDevice} />;
-  if (!onboarded) return <OnboardingScreen onComplete={() => setOnboarded(true)} />;
 
   async function unlinkDevice() {
     if (!supabase || !user || !pairedDevice) throw new Error('Secure device service is unavailable.');
@@ -202,12 +201,16 @@ function AppContent() {
 
   return (
     <SyncProvider userId={user.id}>
-      <WelcomeScreen
-        pairedDevice={pairedDevice}
-        onDeviceReset={unlinkDevice}
-        onSignOut={signOut}
-        onDeleteAccount={deleteAccount}
-      />
+      {!onboarded ? (
+        <OnboardingScreen onComplete={() => setOnboarded(true)} />
+      ) : (
+        <WelcomeScreen
+          pairedDevice={pairedDevice}
+          onDeviceReset={unlinkDevice}
+          onSignOut={signOut}
+          onDeleteAccount={deleteAccount}
+        />
+      )}
     </SyncProvider>
   );
 }

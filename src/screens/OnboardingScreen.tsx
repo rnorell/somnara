@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, Image, TouchableOpacity, StyleSheet,
-  SafeAreaView, Dimensions,
+  SafeAreaView, Dimensions, ScrollView,
 } from 'react-native';
 import Animated, {
   useSharedValue, useAnimatedStyle,
@@ -10,8 +10,11 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as Crypto from 'expo-crypto';
 import { colors, typography, spacing, radii } from '../theme';
 import { DeviceIllustration } from '../components/DeviceIllustration';
+import { SunriseDurationPicker } from '../components/SunriseDurationPicker';
+import { useSyncContext } from '../context/SyncContext';
 
 const { width: W, height: H } = Dimensions.get('window');
 const DAY_LABELS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
@@ -272,10 +275,11 @@ function SunriseStep({ onNext }: { onNext: () => void }) {
 }
 
 // ─── Step 4: Wake time ────────────────────────────────────────────────────────
-function WakeTimeStep({ onComplete }: { onComplete: (hour: number, minute: number, days: number[]) => void }) {
+function WakeTimeStep({ onComplete }: { onComplete: (hour: number, minute: number, days: number[], sunriseDuration: 15 | 30 | 45) => void }) {
   const [hour, setHour] = useState(6);
   const [minute, setMinute] = useState(30);
   const [days, setDays] = useState<number[]>(WEEKDAYS);
+  const [sunriseDuration, setSunriseDuration] = useState<15 | 30 | 45>(30);
 
   const toggleDay = (d: number) =>
     setDays(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d].sort());
@@ -283,7 +287,7 @@ function WakeTimeStep({ onComplete }: { onComplete: (hour: number, minute: numbe
   return (
     <LinearGradient colors={['#FDF8F0', '#FAF0E0', '#F5E8D0']} style={s.fill}>
       <SafeAreaView style={s.fill}>
-        <View style={s.stepInner}>
+        <ScrollView contentContainerStyle={s.stepInnerScroll} showsVerticalScrollIndicator={false}>
           <StepDots total={4} current={3} />
           <FadeIn delay={100}>
             <Text style={s.stepTitle}>When would you like to wake up?</Text>
@@ -315,17 +319,23 @@ function WakeTimeStep({ onComplete }: { onComplete: (hour: number, minute: numbe
             </View>
           </FadeIn>
 
+          <FadeIn delay={600}>
+            <View style={s.sunrisePicker}>
+              <SunriseDurationPicker value={sunriseDuration} onChange={d => setSunriseDuration(d as 15 | 30 | 45)} />
+            </View>
+          </FadeIn>
+
           <FadeIn delay={700}>
             <TouchableOpacity
               style={[s.nextBtn, days.length === 0 && { opacity: 0.4 }]}
-              onPress={() => days.length > 0 && onComplete(hour, minute, days)}
+              onPress={() => days.length > 0 && onComplete(hour, minute, days, sunriseDuration)}
               activeOpacity={0.85}
             >
               <Text style={s.nextBtnText}>Start my mornings</Text>
               <Feather name="sunrise" size={16} color={colors.text.inverse} />
             </TouchableOpacity>
           </FadeIn>
-        </View>
+        </ScrollView>
       </SafeAreaView>
     </LinearGradient>
   );
@@ -349,6 +359,19 @@ function Spinner({ value, min, max, onChange }: { value: number; min: number; ma
 export function OnboardingScreen({ onComplete }: { onComplete: () => void }) {
   const [step, setStep] = useState(0);
   const next = () => setStep(s => s + 1);
+  const { alarms, setAlarms, setPreferences } = useSyncContext();
+
+  const finishSetup = (hour: number, minute: number, days: number[], sunriseDuration: 15 | 30 | 45) => {
+    setAlarms([{
+      id: alarms[0]?.id ?? Crypto.randomUUID(),
+      hour, minute, days,
+      enabled: true,
+      label: 'Sunrise alarm',
+      sunriseDuration,
+    }]);
+    setPreferences({ sunriseDuration });
+    onComplete();
+  };
 
   return (
     <View style={s.fill}>
@@ -356,7 +379,7 @@ export function OnboardingScreen({ onComplete }: { onComplete: () => void }) {
       {step === 1 && <PowerOnStep onNext={next} />}
       {step === 2 && <BluetoothStep onNext={next} />}
       {step === 3 && <SunriseStep onNext={next} />}
-      {step === 4 && <WakeTimeStep onComplete={onComplete} />}
+      {step === 4 && <WakeTimeStep onComplete={finishSetup} />}
     </View>
   );
 }
@@ -415,6 +438,18 @@ const s = StyleSheet.create({
     paddingBottom: spacing['8'],
     gap: spacing['5'],
     justifyContent: 'center',
+  },
+  stepInnerScroll: {
+    flexGrow: 1,
+    width: '100%',
+    paddingHorizontal: spacing['7'],
+    paddingTop: spacing['8'],
+    paddingBottom: spacing['8'],
+    gap: spacing['5'],
+    justifyContent: 'center',
+  },
+  sunrisePicker: {
+    width: '100%',
   },
   illustrationWrap: {
     alignItems: 'center',
