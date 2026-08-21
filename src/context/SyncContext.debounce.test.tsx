@@ -25,3 +25,35 @@ it('debounces a local edit through local -> syncing -> synced', async () => {
   expect(getCtx().status).toBe('synced');
   jest.useRealTimers();
 });
+
+it('writes the confirmed alarm profile to Supabase', async () => {
+  const from = jest.fn()
+    .mockImplementationOnce(() => chainable(EMPTY_ALARMS))
+    .mockImplementationOnce(() => chainable(EMPTY_PREFS));
+  setSupabase({ from });
+  const { getCtx } = await renderSync();
+
+  jest.useFakeTimers();
+  const readBuilder = chainable({ data: [], error: null });
+  const writeBuilder = chainable({ error: null });
+  from.mockImplementationOnce(() => readBuilder).mockImplementationOnce(() => writeBuilder);
+
+  await act(async () => {
+    getCtx().setAlarms([{
+      id: 'profile', hour: 7, minute: 15, days: [1], enabled: true, label: '',
+      deviceSlot: 3, sunriseDuration: 45, finalBrightness: 90, soundId: 12, volume: 60,
+    }]);
+  });
+  await flushFakeTimers();
+
+  expect(writeBuilder.upsert).toHaveBeenCalledWith([
+    expect.objectContaining({
+      device_slot: 3,
+      sunrise_duration: 45,
+      final_brightness: 90,
+      sound_id: 12,
+      volume: 60,
+    }),
+  ], { onConflict: 'user_id,id' });
+  jest.useRealTimers();
+});

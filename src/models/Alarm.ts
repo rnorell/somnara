@@ -6,10 +6,10 @@ export interface Alarm {
   enabled: boolean;
   label: string;
   /** Device slot 0-9 after the alarm is committed to the product. */
-  deviceSlot?: number;
-  sunriseDuration?: 15 | 30 | 45;
-  finalBrightness?: number;
-  soundId?: number;
-  volume?: number;
+  deviceSlot?: number | null;
+  sunriseDuration?: 15 | 30 | 45 | null;
+  finalBrightness?: number | null;
+  soundId?: number | null;
+  volume?: number | null;
   skipNext?: boolean;
 }

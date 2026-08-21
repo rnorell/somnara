@@ -5,11 +5,11 @@ import {
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { colors, typography, spacing, radii } from '../theme';
-import { PairedDevice } from '../models/Device';
+import { ClaimedDevice } from '../models/Device';
 import { useSyncContext } from '../context/SyncContext';
 
 interface Props {
-  pairedDevice: PairedDevice;
+  claimedDevice: ClaimedDevice;
   onClose: () => void;
 }
 
@@ -31,7 +31,7 @@ const GUIDES: Record<string, {
     steps: [
       {
         title: 'Check the device is powered on',
-        body: 'The display on your Somnara should show the time. If it is blank, press and hold the power button for 3 seconds.',
+        body: 'Confirm that Somnara is connected to power.',
       },
       {
         title: 'Enable Bluetooth on your phone',
@@ -46,8 +46,8 @@ const GUIDES: Record<string, {
         body: 'Close the Somnara app fully, reopen it, then tap Connect Device on the Home tab.',
       },
       {
-        title: 'Restart the Somnara',
-        body: 'Hold the small button on the back of the device for 8 seconds until the light flashes white, then release.',
+        title: 'Try the connection again',
+        body: 'Return to Bluetooth setup and start a new search.',
       },
     ],
   },
@@ -72,8 +72,8 @@ const GUIDES: Record<string, {
         body: 'Tap Disconnect in the Home tab, wait 5 seconds, then tap Connect Device.',
       },
       {
-        title: 'Perform a soft reset',
-        body: 'Hold the power button on your Somnara for 5 seconds until it restarts. Your settings are preserved.',
+        title: 'Reconnect your Somnara',
+        body: 'Open Bluetooth setup and connect again before you test the light.',
       },
     ],
   },
@@ -90,12 +90,12 @@ const GUIDES: Record<string, {
         body: 'Tap the alarm to check which days it repeats. Make sure today is included.',
       },
       {
-        title: 'Check the device was connected',
-        body: 'Alarms run on the device — it must be connected via Bluetooth when the alarm is scheduled to trigger.',
+        title: 'Confirm the alarm was saved',
+        body: 'Saved alarms run on Somnara. Your phone does not need to stay connected overnight.',
       },
       {
-        title: 'Verify your phone was not in flight mode',
-        body: 'Flight mode can disable Bluetooth. Check your phone was connected overnight.',
+        title: 'Reconnect after a long power cut',
+        body: 'Reconnect the app before you rely on alarms after Somnara has been without power for an extended period.',
       },
       {
         title: 'Delete and recreate the alarm',
@@ -134,16 +134,16 @@ const GUIDES: Record<string, {
     icon: 'refresh-cw',
     steps: [
       {
-        title: 'Soft reset (keeps your settings)',
-        body: 'Hold the power button for 5 seconds until the display goes blank, then release. The device restarts — all alarms and settings are kept.',
+        title: 'Unlink from your account',
+        body: 'Open Settings and choose Unlink Device. This does not reset the physical Somnara.',
       },
       {
-        title: 'Factory reset (erases device)',
-        body: 'Hold the button on the back of the device for 15 seconds until the light pulses red three times, then release. This wipes all on-device data. Your account settings in the app are not affected.',
+        title: 'Get the correct reset steps',
+        body: 'Contact Somnara support before you reset the physical device. The final button action is not approved yet.',
       },
       {
-        title: 'Re-pair after factory reset',
-        body: 'After a factory reset, go to Settings → My Device → Reset & Unlink, then tap Activate your Somnara to pair the device to your account again.',
+        title: 'Connect again after a confirmed reset',
+        body: 'Claim the device again, then complete Bluetooth setup.',
       },
     ],
   },
@@ -151,7 +151,7 @@ const GUIDES: Record<string, {
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-export function HelpScreen({ pairedDevice, onClose }: Props) {
+export function HelpScreen({ claimedDevice, onClose }: Props) {
   const { preferences, alarms } = useSyncContext();
   const [activeGuide, setActiveGuide] = useState<string | null>(null);
   const [stepIndex, setStepIndex] = useState(0);
@@ -169,14 +169,14 @@ export function HelpScreen({ pairedDevice, onClose }: Props) {
   }
 
   function contactEmail() {
-    const serial = pairedDevice.serial;
+    const serial = claimedDevice.serial;
     const subject = encodeURIComponent(`Help with my Somnara — ${serial}`);
     const body = encodeURIComponent(
       `Hi Somnara Support,\n\nI need help with my device.\n\n` +
       `--- Device Info ---\n` +
       `Serial: ${serial}\n` +
-      `Device name: ${pairedDevice.name}\n` +
-      `Paired: ${new Date(pairedDevice.pairedAt).toLocaleDateString()}\n` +
+      `Device name: ${claimedDevice.name}\n` +
+      `Claimed: ${new Date(claimedDevice.claimedAt).toLocaleDateString()}\n` +
       `Timezone: ${preferences.timezone}\n` +
       `Alarms set: ${alarms.length}\n` +
       `Sunrise duration: ${preferences.sunriseDuration} min\n\n` +
@@ -234,9 +234,9 @@ export function HelpScreen({ pairedDevice, onClose }: Props) {
             {/* Device diagnostics */}
             <Text style={[styles.sectionLabel, { marginTop: spacing['6'] }]}>DEVICE DIAGNOSTICS</Text>
             <View style={styles.diagCard}>
-              <DiagRow icon="cpu" label="Device name" value={pairedDevice.name} />
-              <DiagRow icon="hash" label="Serial" value={pairedDevice.serial} />
-              <DiagRow icon="calendar" label="Paired on" value={new Date(pairedDevice.pairedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })} />
+              <DiagRow icon="cpu" label="Device name" value={claimedDevice.name} />
+              <DiagRow icon="hash" label="Serial" value={claimedDevice.serial} />
+              <DiagRow icon="calendar" label="Claimed on" value={new Date(claimedDevice.claimedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })} />
               <DiagRow icon="clock" label="Timezone" value={preferences.timezone} />
               <DiagRow icon="sun" label="Sunrise duration" value={`${preferences.sunriseDuration} min`} />
               <DiagRow icon="bell" label="Alarms" value={`${alarms.length} schedule${alarms.length !== 1 ? 's' : ''}`} />

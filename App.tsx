@@ -8,7 +8,7 @@ import { ResetPasswordScreen } from './src/screens/ResetPasswordScreen';
 import { WelcomeScreen } from './src/screens/WelcomeScreen';
 import { SyncProvider } from './src/context/SyncContext';
 import { toAppUser, User } from './src/state/authStore';
-import { PairedDevice } from './src/models/Device';
+import { ClaimedDevice } from './src/models/Device';
 import { supabase, configError } from './src/lib/supabase';
 import { storage } from './src/lib/storage';
 import { classifyError } from './src/lib/errors';
@@ -30,7 +30,7 @@ export default function App() {
 
 function AppContent() {
   const [user, setUser] = useState<User | null>(null);
-  const [pairedDevice, setPairedDevice] = useState<PairedDevice | null>(null);
+  const [claimedDevice, setClaimedDevice] = useState<ClaimedDevice | null>(null);
   const [onboarded, setOnboarded] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
   const [deviceLoading, setDeviceLoading] = useState(false);
@@ -82,7 +82,7 @@ function AppContent() {
       }
       setUser(session?.user ? toAppUser(session.user) : null);
       if (!session) {
-        setPairedDevice(null);
+        setClaimedDevice(null);
         setOnboarded(false);
       }
       setAuthLoading(false);
@@ -114,11 +114,11 @@ function AppContent() {
             return;
           }
         }
-        setPairedDevice(data ? {
+        setClaimedDevice(data ? {
           id: data.id,
           serial: data.serial,
           name: data.name,
-          pairedAt: data.paired_at,
+          claimedAt: data.paired_at,
           ownerId: user.id,
           ownerEmail: user.email,
         } : null);
@@ -174,13 +174,13 @@ function AppContent() {
     );
   }
 
-  if (!pairedDevice) return <DeviceActivationScreen user={user} onActivated={setPairedDevice} />;
+  if (!claimedDevice) return <DeviceActivationScreen user={user} onClaimed={setClaimedDevice} />;
 
   async function unlinkDevice() {
-    if (!supabase || !user || !pairedDevice) throw new Error('Secure device service is unavailable.');
-    const { error } = await supabase.rpc('unlink_device', { p_device_id: pairedDevice.id });
+    if (!supabase || !user || !claimedDevice) throw new Error('Secure device service is unavailable.');
+    const { error } = await supabase.rpc('unlink_device', { p_device_id: claimedDevice.id });
     if (error) throw error;
-    setPairedDevice(null);
+    setClaimedDevice(null);
     setOnboarded(false);
   }
 
@@ -205,7 +205,7 @@ function AppContent() {
         <OnboardingScreen onComplete={() => setOnboarded(true)} />
       ) : (
         <WelcomeScreen
-          pairedDevice={pairedDevice}
+          claimedDevice={claimedDevice}
           onDeviceReset={unlinkDevice}
           onSignOut={signOut}
           onDeleteAccount={deleteAccount}

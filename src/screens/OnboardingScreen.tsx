@@ -15,6 +15,7 @@ import { colors, typography, spacing, radii } from '../theme';
 import { DeviceIllustration } from '../components/DeviceIllustration';
 import { SunriseDurationPicker } from '../components/SunriseDurationPicker';
 import { useSyncContext } from '../context/SyncContext';
+import { useBleConnection } from '../ble/useBleConnection';
 
 const { width: W, height: H } = Dimensions.get('window');
 const DAY_LABELS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
@@ -103,11 +104,11 @@ function PowerOnStep({ onNext }: { onNext: () => void }) {
             <Text style={s.stepTitle}>Turn on your Somnara</Text>
           </FadeIn>
           <FadeIn delay={500}>
-            <Text style={s.stepSub}>{'Hold the button on the back of your device\nfor two seconds until the light glows softly.'}</Text>
+            <Text style={s.stepSub}>Connect your Somnara to power before Bluetooth setup.</Text>
           </FadeIn>
           <FadeIn delay={700}>
             <TouchableOpacity style={s.nextBtn} onPress={onNext} activeOpacity={0.85}>
-              <Text style={s.nextBtnText}>It's on</Text>
+              <Text style={s.nextBtnText}>Continue</Text>
               <Feather name="arrow-right" size={16} color={colors.text.inverse} />
             </TouchableOpacity>
           </FadeIn>
@@ -119,7 +120,7 @@ function PowerOnStep({ onNext }: { onNext: () => void }) {
 
 // ─── Step 2: Bluetooth ────────────────────────────────────────────────────────
 function BluetoothStep({ onNext }: { onNext: () => void }) {
-  const [found, setFound] = useState(false);
+  const { state, error, connect } = useBleConnection();
 
   const ring1 = useSharedValue(1);
   const ring2 = useSharedValue(1);
@@ -127,7 +128,6 @@ function BluetoothStep({ onNext }: { onNext: () => void }) {
   const ringOp1 = useSharedValue(0.6);
   const ringOp2 = useSharedValue(0.6);
   const ringOp3 = useSharedValue(0.6);
-  const checkScale = useSharedValue(0);
 
   useEffect(() => {
     const loop = (sv: SharedValue<number>, opSv: SharedValue<number>, delay: number) => {
@@ -138,24 +138,32 @@ function BluetoothStep({ onNext }: { onNext: () => void }) {
     loop(ring2, ringOp2, 600);
     loop(ring3, ringOp3, 1200);
 
-    const t = setTimeout(() => {
-      ring1.value = withTiming(1, { duration: 400 });
-      ring2.value = withTiming(1, { duration: 400 });
-      ring3.value = withTiming(1, { duration: 400 });
-      ringOp1.value = withTiming(0, { duration: 400 });
-      ringOp2.value = withTiming(0, { duration: 400 });
-      ringOp3.value = withTiming(0, { duration: 400 });
-      checkScale.value = withDelay(300, withTiming(1, { duration: 500, easing: Easing.out(Easing.back(1.5)) }));
-      setFound(true);
-      setTimeout(() => onNext(), 2000);
-    }, 3000);
-    return () => clearTimeout(t);
+    return undefined;
   }, []);
 
   const r1s = useAnimatedStyle(() => ({ transform: [{ scale: ring1.value }], opacity: ringOp1.value }));
   const r2s = useAnimatedStyle(() => ({ transform: [{ scale: ring2.value }], opacity: ringOp2.value }));
   const r3s = useAnimatedStyle(() => ({ transform: [{ scale: ring3.value }], opacity: ringOp3.value }));
-  const checkStyle = useAnimatedStyle(() => ({ transform: [{ scale: checkScale.value }] }));
+  const busy = state === 'scanning' || state === 'connecting';
+  const connected = state === 'connected_unverified' || state === 'ready';
+  const title = state === 'idle'
+    ? 'Connect your Somnara'
+    : state === 'scanning'
+      ? 'Looking for Somnara…'
+      : state === 'connecting'
+        ? 'Connecting…'
+        : state === 'ready'
+          ? 'Development device ready'
+          : state === 'connected_unverified'
+            ? 'Somnara connected'
+            : state === 'permission_required'
+              ? 'Bluetooth permission required'
+              : 'Connection stopped';
+  const message = state === 'connected_unverified'
+    ? 'Firmware verification will start after the final protocol is approved.'
+    : state === 'permission_required'
+      ? 'Allow Bluetooth access, then try again.'
+      : error ?? 'Keep your phone near Somnara during setup.';
 
   return (
     <LinearGradient colors={['#FDF8F0', '#FAF0E0', '#F5E8D0']} style={s.fill}>
@@ -167,22 +175,26 @@ function BluetoothStep({ onNext }: { onNext: () => void }) {
             <Animated.View style={[s.btRing, r2s]} />
             <Animated.View style={[s.btRing, r1s]} />
             <View style={s.btCore}>
-              {!found
-                ? <Feather name="bluetooth" size={28} color={colors.accent.DEFAULT} />
-                : (
-                  <Animated.View style={checkStyle}>
-                    <Feather name="check" size={28} color={colors.accent.DEFAULT} />
-                  </Animated.View>
-                )
-              }
+              <Feather name={connected ? 'check' : 'bluetooth'} size={28} color={colors.accent.DEFAULT} />
             </View>
           </View>
           <FadeIn delay={200}>
-            <Text style={s.stepTitle}>{found ? 'Somnara found!' : 'Searching for your device…'}</Text>
+            <Text style={s.stepTitle}>{title}</Text>
           </FadeIn>
-          {!found && (
-            <FadeIn delay={400}>
-              <Text style={s.stepSub}>Make sure your device is on and within range.</Text>
+          <FadeIn delay={400}>
+            <Text style={s.stepSub}>{message}</Text>
+          </FadeIn>
+          {!busy && state !== 'connected_unverified' && (
+            <FadeIn delay={500}>
+              <TouchableOpacity
+                style={s.nextBtn}
+                onPress={state === 'ready' ? onNext : () => { void connect(); }}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+              >
+                <Text style={s.nextBtnText}>{state === 'ready' ? 'Continue' : state === 'idle' ? 'Find My Somnara' : 'Try Again'}</Text>
+                <Feather name={state === 'ready' ? 'arrow-right' : 'refresh-cw'} size={16} color={colors.text.inverse} />
+              </TouchableOpacity>
             </FadeIn>
           )}
         </View>

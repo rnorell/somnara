@@ -12,7 +12,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Feather } from '@expo/vector-icons';
 import { colors, typography, spacing, radii } from '../theme';
-import { PairedDevice } from '../models/Device';
+import { ClaimedDevice } from '../models/Device';
 import { User } from '../state/authStore';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { classifyError } from '../lib/errors';
@@ -24,7 +24,7 @@ const DEV_AUTH_BYPASS = APP_ENV === 'development' && !isSupabaseConfigured;
 
 interface Props {
   user: User;
-  onActivated: (device: PairedDevice) => void;
+  onClaimed: (device: ClaimedDevice) => void;
 }
 
 type Step = 'enter' | 'verifying' | 'confirm' | 'success';
@@ -67,12 +67,12 @@ function CheckmarkCircle() {
   );
 }
 
-export function DeviceActivationScreen({ user, onActivated }: Props) {
+export function DeviceActivationScreen({ user, onClaimed }: Props) {
   const [step, setStep] = useState<Step>('enter');
   const [serial, setSerial] = useState('');
   const [deviceName, setDeviceName] = useState('My Somnara');
   const [error, setError] = useState('');
-  const [claimedDevice, setClaimedDevice] = useState<PairedDevice | null>(null);
+  const [claimedDevice, setClaimedDevice] = useState<ClaimedDevice | null>(null);
 
   function handleSerialChange(text: string) {
     const clean = text.replace(/[^A-Za-z0-9-]/g, '').toUpperCase();
@@ -95,7 +95,7 @@ export function DeviceActivationScreen({ user, onActivated }: Props) {
             id: `dev-device-${Date.now()}`,
             serial,
             name: deviceName.trim() || 'My Somnara',
-            pairedAt: new Date().toISOString(),
+            claimedAt: new Date().toISOString(),
             ownerId: user.id,
             ownerEmail: user.email,
           });
@@ -128,11 +128,11 @@ export function DeviceActivationScreen({ user, onActivated }: Props) {
       return;
     }
     const row = Array.isArray(data) ? data[0] : data;
-    const device: PairedDevice = {
+    const device: ClaimedDevice = {
       id: row.id,
       serial: row.serial,
       name: row.name,
-      pairedAt: row.paired_at,
+      claimedAt: row.paired_at,
       ownerId: user.id,
       ownerEmail: user.email,
     };
@@ -140,7 +140,7 @@ export function DeviceActivationScreen({ user, onActivated }: Props) {
     setStep('confirm');
   }
 
-  async function handlePair() {
+  async function finishClaim() {
     if (!claimedDevice) {
       setError('Secure device activation did not complete.');
       setStep('enter');
@@ -151,7 +151,7 @@ export function DeviceActivationScreen({ user, onActivated }: Props) {
     if (!supabase) {
       if (DEV_AUTH_BYPASS) {
         setStep('success');
-        setTimeout(() => { onActivated({ ...claimedDevice, name }); }, 2000);
+        setTimeout(() => { onClaimed({ ...claimedDevice, name }); }, 1200);
         return;
       }
       setError('Secure device activation did not complete.');
@@ -170,8 +170,8 @@ export function DeviceActivationScreen({ user, onActivated }: Props) {
     }
     setStep('success');
     setTimeout(() => {
-      onActivated({ ...claimedDevice, name });
-    }, 2000);
+      onClaimed({ ...claimedDevice, name });
+    }, 1200);
   }
 
   return (
@@ -186,7 +186,7 @@ export function DeviceActivationScreen({ user, onActivated }: Props) {
               <View style={styles.devBanner}>
                 <Feather name="tool" size={12} color={colors.text.tertiary} />
                 <Text style={styles.devBannerText}>
-                  Dev mode — any device code (8+ characters) will pair a fake local device.
+                  Dev mode — any device code with 8 or more characters will claim a fake local device.
                 </Text>
               </View>
             )}
@@ -198,7 +198,7 @@ export function DeviceActivationScreen({ user, onActivated }: Props) {
                 serial={claimedDevice?.serial ?? ''}
                 deviceName={deviceName}
                 onNameChange={setDeviceName}
-                onPair={handlePair}
+                onConfirm={finishClaim}
               />
             )}
             {step === 'success' && <SuccessStep name={deviceName} userName={user.name} />}
@@ -280,8 +280,8 @@ function VerifyingStep({ serial }: { serial: string }) {
   );
 }
 
-function ConfirmStep({ serial, deviceName, onNameChange, onPair }: {
-  serial: string; deviceName: string; onNameChange: (t: string) => void; onPair: () => void;
+function ConfirmStep({ serial, deviceName, onNameChange, onConfirm }: {
+  serial: string; deviceName: string; onNameChange: (t: string) => void; onConfirm: () => void;
 }) {
   return (
     <View style={styles.stepContainer}>
@@ -289,7 +289,7 @@ function ConfirmStep({ serial, deviceName, onNameChange, onPair }: {
         <Feather name="check-circle" size={28} color="#2ECC71" />
       </View>
       <Text style={styles.stepTitle}>Device confirmed</Text>
-      <Text style={styles.stepSubtitle}>We found your Somnara. Pair it to your account to get started.</Text>
+      <Text style={styles.stepSubtitle}>Confirm this Somnara as yours.</Text>
 
       <View style={styles.deviceCard}>
         <View style={styles.deviceCardRow}>
@@ -303,12 +303,12 @@ function ConfirmStep({ serial, deviceName, onNameChange, onPair }: {
         </View>
         <View style={styles.deviceCardDivider} />
         <View style={styles.deviceCardRow}>
-          <Text style={styles.deviceCardLabel}>Firmware</Text>
-          <Text style={styles.deviceCardValue}>v2.4.1</Text>
+          <Text style={styles.deviceCardLabel}>Bluetooth</Text>
+          <Text style={styles.deviceCardValue}>Not connected</Text>
         </View>
       </View>
 
-      <Text style={styles.fieldLabel}>NAME YOUR DEVICE</Text>
+      <Text style={styles.fieldLabel}>Device name</Text>
       <TextInput
         style={styles.nameInput}
         value={deviceName}
@@ -317,12 +317,12 @@ function ConfirmStep({ serial, deviceName, onNameChange, onPair }: {
         placeholderTextColor={colors.text.tertiary}
         maxLength={30}
         returnKeyType="done"
-        onSubmitEditing={onPair}
+        onSubmitEditing={onConfirm}
       />
 
-      <TouchableOpacity style={styles.primaryBtn} onPress={onPair} activeOpacity={0.85}>
-        <Feather name="link" size={18} color="#fff" />
-        <Text style={styles.primaryBtnText}>Pair to My Account</Text>
+      <TouchableOpacity style={styles.primaryBtn} onPress={onConfirm} activeOpacity={0.85}>
+        <Feather name="shield" size={18} color="#fff" />
+        <Text style={styles.primaryBtnText}>Claim My Somnara</Text>
       </TouchableOpacity>
     </View>
   );
@@ -332,10 +332,10 @@ function SuccessStep({ name, userName }: { name: string; userName: string }) {
   return (
     <View style={styles.stepContainer}>
       <CheckmarkCircle />
-      <Text style={styles.stepTitle}>Paired successfully!</Text>
+      <Text style={styles.stepTitle}>Somnara claimed</Text>
       <Text style={styles.stepSubtitle}>
         <Text style={{ fontWeight: '600', color: colors.accent.DEFAULT }}>{name}</Text>
-        {' '}is now linked to {userName}'s account.
+        {' '}now belongs to {userName}'s account. Bluetooth setup comes next.
       </Text>
 
       <View style={styles.successCard}>

@@ -11,6 +11,7 @@ const USER = 'user-1';
 
 const VALID_ALARM: Alarm = {
   id: 'a1', hour: 7, minute: 30, days: [1, 2, 3], enabled: true, label: 'Wake up',
+  deviceSlot: 2, sunriseDuration: 30, finalBrightness: 80, soundId: 4, volume: 55,
 };
 
 const VALID_PREFS: Preferences = { sunriseDuration: 30, timezone: 'UTC' };
@@ -31,6 +32,20 @@ describe('storage', () => {
 
   it('rejects malformed alarm data instead of returning it', async () => {
     await AsyncStorage.setItem('@somnara/user-1/alarms', JSON.stringify([{ id: 'bad', hour: 25 }]));
+    await expect(storage.loadAlarms(USER)).resolves.toBeNull();
+  });
+
+  it.each([
+    ['deviceSlot', 10],
+    ['sunriseDuration', 20],
+    ['finalBrightness', 101],
+    ['soundId', 26],
+    ['volume', -1],
+  ])('rejects invalid alarm profile field %s', async (field, value) => {
+    await AsyncStorage.setItem(
+      '@somnara/user-1/alarms',
+      JSON.stringify([{ ...VALID_ALARM, [field]: value }]),
+    );
     await expect(storage.loadAlarms(USER)).resolves.toBeNull();
   });
 

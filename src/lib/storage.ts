@@ -8,6 +8,11 @@ function key(userId: string, item: 'alarms' | 'preferences' | 'device_name') {
   return `@somnara/${safeUserId}/${item}`;
 }
 
+function optionalInteger(value: unknown, min: number, max: number): boolean {
+  return value === undefined || value === null
+    || (Number.isInteger(value) && (value as number) >= min && (value as number) <= max);
+}
+
 function isAlarm(value: unknown): value is Alarm {
   if (!value || typeof value !== 'object') return false;
   const alarm = value as Alarm;
@@ -17,7 +22,13 @@ function isAlarm(value: unknown): value is Alarm {
     && Array.isArray(alarm.days) && alarm.days.length > 0 && alarm.days.length <= 7
     && alarm.days.every(day => Number.isInteger(day) && day >= 0 && day <= 6)
     && typeof alarm.enabled === 'boolean'
-    && typeof alarm.label === 'string' && alarm.label.length <= 100;
+    && typeof alarm.label === 'string' && alarm.label.length <= 100
+    && optionalInteger(alarm.deviceSlot, 0, 9)
+    && (alarm.sunriseDuration === undefined || alarm.sunriseDuration === null || [15, 30, 45].includes(alarm.sunriseDuration))
+    && optionalInteger(alarm.finalBrightness, 0, 100)
+    && optionalInteger(alarm.soundId, 0, 25)
+    && optionalInteger(alarm.volume, 0, 100)
+    && (alarm.skipNext === undefined || typeof alarm.skipNext === 'boolean');
 }
 
 function isPreferences(value: unknown): value is Preferences {

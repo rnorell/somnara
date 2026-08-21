@@ -1,8 +1,8 @@
-export interface PairedDevice {
+export interface ClaimedDevice {
   id: string;
   serial: string;
   name: string;
-  pairedAt: string;
+  claimedAt: string;
   ownerId: string;
   ownerEmail: string;
 }

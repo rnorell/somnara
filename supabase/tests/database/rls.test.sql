@@ -14,7 +14,7 @@
 -- CLI helper function, since that's stable across CLI versions.
 
 begin;
-select plan(19);
+select plan(26);
 
 -- ── Setup: two users, entirely independent data ──────────────────────────
 -- auth.users has more columns in a real project (encrypted_password, etc.)
@@ -41,6 +41,39 @@ insert into public.alarms (id, user_id, hour, minute, days, enabled, label)
 values
   ('alarm-a', '11111111-1111-1111-1111-111111111111', 7, 0, '{1,2,3}', true, 'A''s alarm'),
   ('alarm-b', '22222222-2222-2222-2222-222222222222', 8, 0, '{1,2,3}', true, 'B''s alarm');
+
+select lives_ok(
+  $$ update public.alarms
+     set device_slot = 2, sunrise_duration = 30, final_brightness = 80, sound_id = 5, volume = 60
+     where user_id = '11111111-1111-1111-1111-111111111111' and id = 'alarm-a' $$,
+  'a complete confirmed alarm profile is accepted'
+);
+select results_eq(
+  $$ select device_slot, sunrise_duration, final_brightness, sound_id, volume
+     from public.alarms where user_id = '11111111-1111-1111-1111-111111111111' and id = 'alarm-a' $$,
+  $$ values (2::smallint, 30::smallint, 80::smallint, 5::smallint, 60::smallint) $$,
+  'the complete alarm profile is stored'
+);
+select throws_ok(
+  $$ update public.alarms set device_slot = 10 where id = 'alarm-a' $$,
+  'device slot outside 0-9 is rejected'
+);
+select throws_ok(
+  $$ update public.alarms set sunrise_duration = 20 where id = 'alarm-a' $$,
+  'unsupported sunrise duration is rejected'
+);
+select throws_ok(
+  $$ update public.alarms set final_brightness = 101 where id = 'alarm-a' $$,
+  'brightness above 100 is rejected'
+);
+select throws_ok(
+  $$ update public.alarms set sound_id = 26 where id = 'alarm-a' $$,
+  'sound ID above 25 is rejected'
+);
+select throws_ok(
+  $$ update public.alarms set volume = -1 where id = 'alarm-a' $$,
+  'volume below zero is rejected'
+);
 
 insert into private.device_inventory (serial, activation_code_lookup, activation_code_hash)
 values ('SOM-TEST-0001', extensions.digest('TESTCODE123', 'sha256'), extensions.crypt('TESTCODE123', extensions.gen_salt('bf')));

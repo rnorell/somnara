@@ -51,6 +51,11 @@ create table if not exists public.alarms (
   ),
   enabled boolean not null default true,
   label text not null default '' check (char_length(label) <= 100),
+  device_slot smallint check (device_slot between 0 and 9),
+  sunrise_duration smallint check (sunrise_duration in (15, 30, 45)),
+  final_brightness smallint check (final_brightness between 0 and 100),
+  sound_id smallint check (sound_id between 0 and 25),
+  volume smallint check (volume between 0 and 100),
   updated_at timestamptz not null default now(),
   primary key (user_id, id)
 );

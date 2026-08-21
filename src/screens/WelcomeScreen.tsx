@@ -17,7 +17,7 @@ import { useGreeting } from '../hooks/useGreeting';
 import { useDeviceStore } from '../state/deviceStore';
 import { useSyncContext } from '../context/SyncContext';
 import { HelpScreen } from './HelpScreen';
-import { PairedDevice } from '../models/Device';
+import { ClaimedDevice } from '../models/Device';
 import { SomnaraLogo } from '../components/SomnaraLogo';
 import { isProduction } from '../lib/env';
 
@@ -33,13 +33,13 @@ const TABS: { id: Tab; icon: React.ComponentProps<typeof Feather>['name'] }[] = 
 import React from 'react';
 
 interface WelcomeScreenProps {
-  pairedDevice: PairedDevice;
+  claimedDevice: ClaimedDevice;
   onDeviceReset: () => Promise<void>;
   onSignOut: () => void;
   onDeleteAccount: () => Promise<void>;
 }
 
-export function WelcomeScreen({ pairedDevice, onDeviceReset, onSignOut, onDeleteAccount }: WelcomeScreenProps) {
+export function WelcomeScreen({ claimedDevice, onDeviceReset, onSignOut, onDeleteAccount }: WelcomeScreenProps) {
   const greeting = useGreeting();
   const { device, connect, disconnect, togglePower } = useDeviceStore();
   const { preferences, setPreferences } = useSyncContext();
@@ -49,7 +49,7 @@ export function WelcomeScreen({ pairedDevice, onDeviceReset, onSignOut, onDelete
   function handleDeleteAccount() {
     Alert.alert(
       'Delete Account',
-      'This permanently deletes your account, paired device, alarms, and preferences. This cannot be undone.',
+      'This permanently deletes your account, claimed device, alarms, and preferences. This cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -160,7 +160,7 @@ export function WelcomeScreen({ pairedDevice, onDeviceReset, onSignOut, onDelete
               />
               <Text style={[styles.settingsSection, { marginTop: spacing['6'] }]}>MY DEVICE</Text>
               <DeviceOwnershipCard
-                device={pairedDevice}
+                device={claimedDevice}
                 onReset={onDeviceReset}
               />
               <Text style={[styles.settingsSection, { marginTop: spacing['6'] }]}>SUPPORT</Text>
@@ -200,7 +200,7 @@ export function WelcomeScreen({ pairedDevice, onDeviceReset, onSignOut, onDelete
       </SafeAreaView>
 
       <Modal visible={showHelp} animationType="slide" presentationStyle="pageSheet">
-        <HelpScreen pairedDevice={pairedDevice} onClose={() => setShowHelp(false)} />
+        <HelpScreen claimedDevice={claimedDevice} onClose={() => setShowHelp(false)} />
       </Modal>
     </LinearGradient>
   );

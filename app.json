@@ -52,7 +52,16 @@
       ],
       "expo-font",
       "expo-audio",
-      "@sentry/react-native"
+      "@sentry/react-native",
+      [
+        "react-native-ble-plx",
+        {
+          "isBackgroundEnabled": false,
+          "bluetoothAlwaysPermission": "Allow Somnara to connect to your alarm clock."
+        }
+      ],
+      "expo-dev-client",
+      "expo-asset"
     ]
   }
 }

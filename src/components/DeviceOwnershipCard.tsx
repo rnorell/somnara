@@ -5,10 +5,10 @@ import {
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { colors, typography, spacing, radii } from '../theme';
-import { PairedDevice } from '../models/Device';
+import { ClaimedDevice } from '../models/Device';
 
 interface Props {
-  device: PairedDevice;
+  device: ClaimedDevice;
   onReset: () => Promise<void>;
 }
 
@@ -74,7 +74,7 @@ export function DeviceOwnershipCard({ device, onReset }: Props) {
           </View>
           <View style={styles.pairedBadge}>
             <View style={styles.pairedDot} />
-            <Text style={styles.pairedText}>Paired</Text>
+            <Text style={styles.pairedText}>Claimed</Text>
           </View>
         </View>
 
@@ -84,7 +84,7 @@ export function DeviceOwnershipCard({ device, onReset }: Props) {
         <View style={styles.detailRow}>
           <Feather name="calendar" size={14} color={colors.text.tertiary} />
           <Text style={styles.detailLabel}>Activated</Text>
-          <Text style={styles.detailValue}>{formatDate(device.pairedAt)}</Text>
+          <Text style={styles.detailValue}>{formatDate(device.claimedAt)}</Text>
         </View>
         <View style={styles.detailRow}>
           <Feather name="user" size={14} color={colors.text.tertiary} />

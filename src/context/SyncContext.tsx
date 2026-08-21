@@ -171,6 +171,11 @@ export function SyncProvider({ userId, children }: Props) {
           days: r.days,
           enabled: r.enabled,
           label: r.label ?? '',
+          deviceSlot: r.device_slot ?? null,
+          sunriseDuration: r.sunrise_duration ?? null,
+          finalBrightness: r.final_brightness ?? null,
+          soundId: r.sound_id ?? null,
+          volume: r.volume ?? null,
         }));
         setAlarmsState(mapped);
         void storage.saveAlarms(uid, mapped);
@@ -243,6 +248,11 @@ async function pushAlarmsToSupabase(userId: string, alarms: Alarm[]) {
     days: a.days,
     enabled: a.enabled,
     label: a.label,
+    device_slot: a.deviceSlot ?? null,
+    sunrise_duration: a.sunriseDuration ?? null,
+    final_brightness: a.finalBrightness ?? null,
+    sound_id: a.soundId ?? null,
+    volume: a.volume ?? null,
     updated_at: new Date().toISOString(),
   }));
   if (rows.length > 0) {

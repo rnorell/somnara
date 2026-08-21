@@ -17,7 +17,7 @@ function timeAgo(iso: string): string {
 
 const COPY: Record<SyncStatus, { label: string; sub?: string; color: string }> = {
   loading: { label: 'Loading…', color: colors.text.tertiary },
-  local: { label: 'Saved on this device', color: colors.text.tertiary },
+  local: { label: 'Saved in this app', color: colors.text.tertiary },
   syncing: { label: 'Syncing…', color: colors.accent.DEFAULT },
   synced: { label: 'Synced', color: colors.success },
   offline: { label: 'Offline', sub: 'Changes are saved locally and will sync automatically.', color: colors.text.tertiary },
