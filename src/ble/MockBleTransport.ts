@@ -5,6 +5,10 @@ export class MockBleTransport implements BleTransport {
   readonly candidate: BleDeviceCandidate = { id: 'mock-somnara-001', name: 'Somnara Development Device' };
   private connected = false;
   private destroyed = false;
+  readonly writtenFrames: Uint8Array[] = [];
+  negotiatedMtu = 247;
+  private onData: ((bytes: Uint8Array) => void) | null = null;
+  private onError: ((error: Error) => void) | null = null;
 
   async requestPermissions(): Promise<boolean> {
     return true;
@@ -28,13 +32,40 @@ export class MockBleTransport implements BleTransport {
     this.connected = false;
   }
 
-  subscribe(_onData: (bytes: Uint8Array) => void, _onError: (error: Error) => void): () => void {
+  async negotiateMtu(minimumMtu: number): Promise<number> {
     this.assertConnected();
-    return () => undefined;
+    if (this.negotiatedMtu < minimumMtu) {
+      throw new BleTransportError(
+        'mtu_negotiation_failed',
+        `Somnara requires an MTU of at least ${minimumMtu} bytes. The device supplied ${this.negotiatedMtu}.`,
+      );
+    }
+    return this.negotiatedMtu;
   }
 
-  async writeRaw(_bytes: Uint8Array): Promise<void> {
+  subscribe(onData: (bytes: Uint8Array) => void, onError: (error: Error) => void): () => void {
     this.assertConnected();
+    this.onData = onData;
+    this.onError = onError;
+    return () => {
+      this.onData = null;
+      this.onError = null;
+    };
+  }
+
+  emitNotification(bytes: Uint8Array): void {
+    this.assertConnected();
+    this.onData?.(new Uint8Array(bytes));
+  }
+
+  emitError(error: Error): void {
+    this.assertConnected();
+    this.onError?.(error);
+  }
+
+  async writeRaw(bytes: Uint8Array): Promise<void> {
+    this.assertConnected();
+    this.writtenFrames.push(new Uint8Array(bytes));
   }
 
   async destroy(): Promise<void> {

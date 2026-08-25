@@ -96,6 +96,28 @@ export class NativeBleTransport implements BleTransport {
     if (deviceId) await this.manager.cancelDeviceConnection(deviceId).catch(() => undefined);
   }
 
+  async negotiateMtu(minimumMtu: number): Promise<number | null> {
+    const device = this.requireConnectedDevice();
+    if (Platform.OS !== 'android') return null;
+    try {
+      const updatedDevice = await device.requestMTU(minimumMtu);
+      if (updatedDevice.mtu < minimumMtu) {
+        throw new BleTransportError(
+          'mtu_negotiation_failed',
+          `Somnara requires an MTU of at least ${minimumMtu} bytes. Android supplied ${updatedDevice.mtu}.`,
+        );
+      }
+      this.connectedDevice = updatedDevice;
+      return updatedDevice.mtu;
+    } catch (error) {
+      if (error instanceof BleTransportError) throw error;
+      throw new BleTransportError(
+        'mtu_negotiation_failed',
+        error instanceof Error ? `Could not prepare the BLE packet size: ${error.message}` : 'Could not prepare the BLE packet size.',
+      );
+    }
+  }
+
   subscribe(onData: (bytes: Uint8Array) => void, onError: (error: Error) => void): () => void {
     const device = this.requireConnectedDevice();
     this.notification?.remove();

@@ -17,6 +17,7 @@ export type BleTransportErrorCode =
   | 'bluetooth_off'
   | 'scan_timeout'
   | 'connection_failed'
+  | 'mtu_negotiation_failed'
   | 'operation_cancelled'
   | 'unknown';
 
@@ -30,6 +31,7 @@ export interface BleTransport {
   requestPermissions(): Promise<boolean>;
   scan(timeoutMs?: number): Promise<BleDeviceCandidate>;
   connect(deviceId: string): Promise<void>;
+  negotiateMtu(minimumMtu: number): Promise<number | null>;
   disconnect(): Promise<void>;
   subscribe(onData: (bytes: Uint8Array) => void, onError: (error: Error) => void): () => void;
   writeRaw(bytes: Uint8Array): Promise<void>;

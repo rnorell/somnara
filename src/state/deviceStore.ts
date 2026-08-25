@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { DeviceStatus } from '../models/Device';
+import { DeviceStatusReport } from '../ble/UplinkFrame';
 
-const initialState: DeviceStatus = {
+export const initialDeviceStatus: DeviceStatus = {
   isConnected: false,
   isOn: false,
   mode: 'sunrise',
@@ -17,14 +18,31 @@ const initialState: DeviceStatus = {
   ota: { state: 'idle', progress: 0, errorCode: null },
 };
 
+export function applyBleStatusReport(current: DeviceStatus, report: DeviceStatusReport): DeviceStatus {
+  return {
+    ...current,
+    isConnected: true,
+    isOn: report.power,
+    brightness: report.brightnessPercent,
+    volume: report.volumePercent,
+    activeSoundId: report.soundId,
+    playbackState: 'unknown',
+    clockValidity: report.clockValid ? 'valid' : 'invalid',
+    storedAlarmCount: report.alarmCount,
+    firmwareVersion: `${report.firmwareMajor}.${report.firmwareMinor}.${report.firmwarePatch}+${report.firmwareBuild}`,
+    hardwareVersion: String(report.hardwareRevision),
+  };
+}
+
 export function useDeviceStore() {
-  const [device, setDevice] = useState<DeviceStatus>(initialState);
+  const [device, setDevice] = useState<DeviceStatus>(initialDeviceStatus);
 
   const connect = () => setDevice(d => ({ ...d, isConnected: true, isOn: true }));
   const disconnect = () => setDevice(d => ({ ...d, isConnected: false, isOn: false }));
   const togglePower = () => setDevice(d => ({ ...d, isOn: !d.isOn }));
   const reportClockInvalid = () => setDevice(d => ({ ...d, clockValidity: 'invalid' }));
   const reportClockSynchronized = () => setDevice(d => ({ ...d, clockValidity: 'valid' }));
+  const applyBleStatus = (report: DeviceStatusReport) => setDevice(d => applyBleStatusReport(d, report));
 
-  return { device, connect, disconnect, togglePower, reportClockInvalid, reportClockSynchronized, setDevice };
+  return { device, connect, disconnect, togglePower, reportClockInvalid, reportClockSynchronized, applyBleStatus, setDevice };
 }
