@@ -160,10 +160,10 @@ function BluetoothStep({ onNext }: { onNext: () => void }) {
               ? 'Bluetooth permission required'
               : 'Connection stopped';
   const message = state === 'connected_unverified'
-    ? 'Firmware verification will start after the final protocol is approved.'
+    ? 'If your phone asks to bond, accept the prompt. It starts after Notify is enabled or after the first data packet.'
     : state === 'permission_required'
       ? 'Allow Bluetooth access, then try again.'
-      : error ?? 'Keep your phone near Somnara during setup.';
+      : error ?? 'Keep your phone near Somnara. The bonding prompt starts after the first secure data exchange.';
 
   return (
     <LinearGradient colors={['#FDF8F0', '#FAF0E0', '#F5E8D0']} style={s.fill}>

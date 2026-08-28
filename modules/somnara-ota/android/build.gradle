@@ -1,0 +1,25 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'com.somnara'
+version = '1.0.0'
+
+android {
+  namespace 'com.somnara.ota'
+  defaultConfig {
+    minSdkVersion 21
+    versionCode 1
+    versionName '1.0.0'
+    testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
+  }
+  testOptions {
+    unitTests.returnDefaultValues = true
+  }
+}
+
+dependencies {
+  implementation files('libs/jl_bt_ota_V1.11.0_11015-release.aar')
+  testImplementation 'junit:junit:4.13.2'
+}

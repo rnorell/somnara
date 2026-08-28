@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "modules": ["SomnaraOtaModule"]
+  },
+  "android": {
+    "modules": ["com.somnara.ota.SomnaraOtaModule"]
+  }
+}

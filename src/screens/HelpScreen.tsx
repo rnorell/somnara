@@ -138,12 +138,12 @@ const GUIDES: Record<string, {
         body: 'Open Settings and choose Unlink Device. This does not reset the physical Somnara.',
       },
       {
-        title: 'Get the correct reset steps',
-        body: 'Contact Somnara support before you reset the physical device. The final button action is not approved yet.',
+        title: 'Start the recovery reset',
+        body: 'Switch the power off and on five times. Keep each power-on period under 10 seconds. This recovery reset is confirmed, but deletion of saved Bluetooth bonds is not yet confirmed.',
       },
       {
-        title: 'Connect again after a confirmed reset',
-        body: 'Claim the device again, then complete Bluetooth setup.',
+        title: 'Connect and accept bonding',
+        body: 'Claim the device again and connect. The phone bonding prompt starts after Notify is enabled or after the first data packet. Accept the prompt to complete setup.',
       },
     ],
   },

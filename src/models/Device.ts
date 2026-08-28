@@ -31,9 +31,18 @@ export interface DeviceStatus {
   firmwareVersion: string | null;
   hardwareVersion: string | null;
   ota: {
-    state: 'idle' | 'checking' | 'transferring' | 'verifying' | 'restarting' | 'complete' | 'failed';
+    state: 'idle' | 'checking' | 'connecting' | 'authenticating' | 'transferring' | 'verifying' | 'restarting' | 'complete' | 'failed' | 'cancelled';
     progress: number;
     errorCode: string | null;
+    selectedFileName: string | null;
+    selectedFileUri: string | null;
+    selectedFileSha256: string | null;
+    sdkVersion: string | null;
+    targetIdentity: string | null;
+    startedAt: string | null;
+    finishedAt: string | null;
+    lastRecoverableError: string | null;
+    finalFirmwareVersion: string | null;
   };
 }
 

@@ -15,7 +15,20 @@ export const initialDeviceStatus: DeviceStatus = {
   storedAlarmCount: 0,
   firmwareVersion: null,
   hardwareVersion: null,
-  ota: { state: 'idle', progress: 0, errorCode: null },
+  ota: {
+    state: 'idle',
+    progress: 0,
+    errorCode: null,
+    selectedFileName: null,
+    selectedFileUri: null,
+    selectedFileSha256: null,
+    sdkVersion: null,
+    targetIdentity: null,
+    startedAt: null,
+    finishedAt: null,
+    lastRecoverableError: null,
+    finalFirmwareVersion: null,
+  },
 };
 
 export function applyBleStatusReport(current: DeviceStatus, report: DeviceStatusReport): DeviceStatus {

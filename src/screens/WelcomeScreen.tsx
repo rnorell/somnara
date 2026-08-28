@@ -20,6 +20,8 @@ import { HelpScreen } from './HelpScreen';
 import { ClaimedDevice } from '../models/Device';
 import { SomnaraLogo } from '../components/SomnaraLogo';
 import { isProduction } from '../lib/env';
+import { isOtaTestEnabled } from '../lib/env';
+import { OtaTestPanel } from '../components/OtaTestPanel';
 
 type Tab = 'Home' | 'Alarms' | 'Sounds' | 'Settings';
 
@@ -45,6 +47,7 @@ export function WelcomeScreen({ claimedDevice, onDeviceReset, onSignOut, onDelet
   const { preferences, setPreferences } = useSyncContext();
   const [activeTab, setActiveTab] = useState<Tab>('Home');
   const [showHelp, setShowHelp] = useState(false);
+  const [showOta, setShowOta] = useState(false);
 
   function handleDeleteAccount() {
     Alert.alert(
@@ -163,6 +166,18 @@ export function WelcomeScreen({ claimedDevice, onDeviceReset, onSignOut, onDelet
                 device={claimedDevice}
                 onReset={onDeviceReset}
               />
+              {isOtaTestEnabled && (
+                <TouchableOpacity style={[styles.helpRow, { marginTop: spacing['3'] }]} onPress={() => setShowOta(true)} activeOpacity={0.8}>
+                  <View style={styles.helpIcon}>
+                    <Feather name="upload-cloud" size={18} color={colors.accent.DEFAULT} />
+                  </View>
+                  <View style={styles.helpText}>
+                    <Text style={styles.helpTitle}>Update Somnara</Text>
+                    <Text style={styles.helpSub}>Install and verify test firmware</Text>
+                  </View>
+                  <Feather name="chevron-right" size={16} color={colors.text.tertiary} />
+                </TouchableOpacity>
+              )}
               <Text style={[styles.settingsSection, { marginTop: spacing['6'] }]}>SUPPORT</Text>
               <TouchableOpacity style={styles.helpRow} onPress={() => setShowHelp(true)} activeOpacity={0.8}>
                 <View style={styles.helpIcon}>
@@ -202,6 +217,7 @@ export function WelcomeScreen({ claimedDevice, onDeviceReset, onSignOut, onDelet
       <Modal visible={showHelp} animationType="slide" presentationStyle="pageSheet">
         <HelpScreen claimedDevice={claimedDevice} onClose={() => setShowHelp(false)} />
       </Modal>
+      {isOtaTestEnabled && <OtaTestPanel visible={showOta} onClose={() => setShowOta(false)} />}
     </LinearGradient>
   );
 }

@@ -11,12 +11,20 @@
       "bundleIdentifier": "com.somnara.app",
       "supportsTablet": true,
       "usesAppleSignIn": true,
+      "infoPlist": {
+        "NSBluetoothAlwaysUsageDescription": "Allow Somnara to connect to your alarm clock and install test firmware."
+      },
       "config": {
         "usesNonExemptEncryption": false
       }
     },
     "android": {
       "package": "com.somnara.app",
+      "permissions": [
+        "android.permission.BLUETOOTH_SCAN",
+        "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
