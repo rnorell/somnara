@@ -139,7 +139,7 @@ const GUIDES: Record<string, {
       },
       {
         title: 'Start the recovery reset',
-        body: 'Switch the power off and on five times. Keep each power-on period under 10 seconds. This recovery reset is confirmed, but deletion of saved Bluetooth bonds is not yet confirmed.',
+        body: 'Switch the power off and on five times. Keep each power-on period under 10 seconds. This reset deletes the saved Bluetooth bond.',
       },
       {
         title: 'Connect and accept bonding',

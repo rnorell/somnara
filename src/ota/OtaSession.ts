@@ -1,6 +1,26 @@
 import { FirmwareInspection, OtaDevice, OtaEvent, OtaSdkInfo } from 'somnara-ota';
 
-export const BUNDLED_FIRMWARE_SHA256 = '8E6BEE05A9F7D55AF9B6AD7FCAD7742E5A05F9A22A551128E93F03104084B66D';
+export interface ApprovedFirmware {
+  readonly fileName: string;
+  readonly version: string;
+  readonly sha256: string;
+}
+
+export const APPROVED_FIRMWARE: readonly ApprovedFirmware[] = [
+  {
+    fileName: 'somnara_V1_260828_5C00.ufw',
+    version: '0.0.2',
+    sha256: '8E6BEE05A9F7D55AF9B6AD7FCAD7742E5A05F9A22A551128E93F03104084B66D',
+  },
+  {
+    fileName: 'somnara_0_0_3_260901_71C6.ufw',
+    version: '0.0.3',
+    sha256: 'C1E4B92BC7656EC8F4AC7F2C19E12B07A82E1D708912B88B82A4450D94FA59BD',
+  },
+];
+
+export const BUNDLED_FIRMWARE = APPROVED_FIRMWARE[1];
+export const BUNDLED_FIRMWARE_SHA256 = BUNDLED_FIRMWARE.sha256;
 
 export type OtaSessionPhase = 'idle' | 'ready' | OtaEvent['phase'] | 'reconnecting';
 
@@ -14,6 +34,7 @@ export interface OtaSession {
   target: OtaDevice | null;
   startedAt: string | null;
   finishedAt: string | null;
+  expectedVersion: string | null;
   finalVersion: string | null;
   errorCode: string | null;
   recoverableError: string | null;
@@ -22,7 +43,7 @@ export interface OtaSession {
 
 export const initialOtaSession: OtaSession = {
   phase: 'idle', progress: 0, sdk: null, firmware: null, target: null,
-  startedAt: null, finishedAt: null, finalVersion: null,
+  startedAt: null, finishedAt: null, expectedVersion: null, finalVersion: null,
   errorCode: null, recoverableError: null, log: [],
 };
 
@@ -32,6 +53,12 @@ export function validateFirmware(inspection: FirmwareInspection, expectedSha256?
   if (expectedSha256 && inspection.sha256.toUpperCase() !== expectedSha256.toUpperCase()) {
     throw new Error('FIRMWARE_HASH_MISMATCH');
   }
+}
+
+export function approvedFirmwareFor(inspection: FirmwareInspection): ApprovedFirmware | null {
+  return APPROVED_FIRMWARE.find(record => (
+    record.sha256.toUpperCase() === inspection.sha256.toUpperCase()
+  )) ?? null;
 }
 
 export function applyOtaEvent(session: OtaSession, event: OtaEvent): OtaSession {
@@ -56,6 +83,10 @@ export function beginReconnection(session: OtaSession): OtaSession {
 export function confirmVersionReadback(session: OtaSession, version: string, timestamp = new Date().toISOString()): OtaSession {
   if (session.phase !== 'reconnecting') throw new Error('OTA_RECONNECTION_NOT_ACTIVE');
   if (!version.trim()) throw new Error('FIRMWARE_VERSION_MISSING');
+  if (!session.expectedVersion) throw new Error('EXPECTED_FIRMWARE_VERSION_MISSING');
+  if (version !== session.expectedVersion && !version.startsWith(`${session.expectedVersion}+`)) {
+    throw new Error('FIRMWARE_VERSION_MISMATCH');
+  }
   const complete: OtaEvent = { phase: 'complete', progress: 100, finalVersion: version, timestamp };
   return { ...session, phase: 'complete', progress: 100, finalVersion: version, finishedAt: timestamp, log: [...session.log, complete] };
 }
@@ -77,6 +108,7 @@ export function createDiagnosticReport(session: OtaSession, osName: string, osVe
     `Firmware: ${session.firmware?.name ?? 'unknown'}`,
     `Firmware size: ${session.firmware?.sizeBytes ?? 'unknown'}`,
     `Firmware SHA-256: ${session.firmware?.sha256 ?? 'unknown'}`,
+    `Expected firmware version: ${session.expectedVersion ?? 'not declared'}`,
     `Started: ${session.startedAt ?? 'not started'}`,
     `Finished: ${session.finishedAt ?? 'not finished'}`,
     `Result: ${session.phase}`,

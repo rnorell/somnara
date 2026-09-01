@@ -13,11 +13,12 @@ import {
 import { colors, radii, spacing, typography } from '../theme';
 import { useBleConnection } from '../ble/useBleConnection';
 import {
-  applyOtaEvent, beginReconnection, BUNDLED_FIRMWARE_SHA256, confirmVersionReadback,
-  createDiagnosticReport, initialOtaSession, OtaSession, validateFirmware,
+  applyOtaEvent, approvedFirmwareFor, beginReconnection, BUNDLED_FIRMWARE as BUNDLED_FIRMWARE_RECORD,
+  BUNDLED_FIRMWARE_SHA256, confirmVersionReadback, createDiagnosticReport, initialOtaSession,
+  OtaSession, validateFirmware,
 } from '../ota/OtaSession';
 
-const BUNDLED_FIRMWARE = require('../../assets/firmware/somnara_V1_260828_5C00.ufw');
+const BUNDLED_FIRMWARE_ASSET = require('../../assets/firmware/somnara_0_0_3_260901_71C6.ufw');
 
 interface Props {
   visible: boolean;
@@ -30,6 +31,8 @@ function messageForError(error: unknown): string {
     FIRMWARE_HASH_MISMATCH: 'The file checksum does not match. Choose the correct UFW file.',
     FIRMWARE_EXTENSION_INVALID: 'Choose a JieLi UFW firmware file.',
     FIRMWARE_EMPTY: 'The firmware file is empty.',
+    EXPECTED_FIRMWARE_VERSION_MISSING: 'This file has no approved version record. Use a supplied Somnara UFW for a final version test.',
+    FIRMWARE_VERSION_MISMATCH: 'The device did not report the expected firmware version.',
     BLUETOOTH_PERMISSION_REQUIRED: 'Allow Bluetooth access, then try again.',
   };
   return known[code] ?? code;
@@ -58,7 +61,21 @@ export function OtaTestPanel({ visible, onClose }: Props) {
     if (!normalBle.latestStatus || session.phase !== 'reconnecting') return;
     const status = normalBle.latestStatus;
     const version = `${status.firmwareMajor}.${status.firmwareMinor}.${status.firmwarePatch}+${status.firmwareBuild}`;
-    setSession(current => confirmVersionReadback(current, version));
+    setSession(current => {
+      try {
+        return confirmVersionReadback(current, version);
+      } catch (error) {
+        const code = error instanceof Error ? error.message : 'FIRMWARE_VERSION_READBACK_FAILED';
+        return applyOtaEvent(current, {
+          phase: 'failed',
+          progress: current.progress,
+          code,
+          message: messageForError(error),
+          recoverable: true,
+          timestamp: new Date().toISOString(),
+        });
+      }
+    });
   }, [normalBle.latestStatus, session.phase]);
 
   const report = useMemo(
@@ -79,12 +96,18 @@ export function OtaTestPanel({ visible, onClose }: Props) {
 
   function loadBundledFirmware() {
     return run(async () => {
-      const asset = Asset.fromModule(BUNDLED_FIRMWARE);
+      const asset = Asset.fromModule(BUNDLED_FIRMWARE_ASSET);
       await asset.downloadAsync();
       if (!asset.localUri) throw new Error('The bundled firmware is not available on this phone.');
       const inspection = await inspectFirmware(asset.localUri);
       validateFirmware(inspection, BUNDLED_FIRMWARE_SHA256);
-      setSession(current => ({ ...current, firmware: inspection, phase: 'ready', errorCode: null }));
+      setSession(current => ({
+        ...current,
+        firmware: inspection,
+        expectedVersion: BUNDLED_FIRMWARE_RECORD.version,
+        phase: 'ready',
+        errorCode: null,
+      }));
     });
   }
 
@@ -94,7 +117,14 @@ export function OtaTestPanel({ visible, onClose }: Props) {
       if (result.canceled) return;
       const inspection = await inspectFirmware(result.assets[0].uri);
       validateFirmware(inspection);
-      setSession(current => ({ ...current, firmware: inspection, phase: 'ready', errorCode: null }));
+      const approved = approvedFirmwareFor(inspection);
+      setSession(current => ({
+        ...current,
+        firmware: inspection,
+        expectedVersion: approved?.version ?? null,
+        phase: 'ready',
+        errorCode: null,
+      }));
     });
   }
 
@@ -173,13 +203,13 @@ export function OtaTestPanel({ visible, onClose }: Props) {
           <View style={styles.headerSpacer} />
         </View>
         <ScrollView contentContainerStyle={styles.content}>
-          <Text style={styles.lead}>Install a test UFW and verify the new version before release.</Text>
+          <Text style={styles.lead}>Install firmware 0.0.3. Confirm the new version before release.</Text>
 
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Firmware file</Text>
             <Text style={styles.value}>{session.firmware?.name ?? 'No file selected'}</Text>
-            {session.firmware && <Text style={styles.meta}>{session.firmware.sizeBytes.toLocaleString()} bytes{`\n`}{session.firmware.sha256}</Text>}
-            <Action label="Use Bundled Firmware" icon="package" onPress={loadBundledFirmware} disabled={busy || active} />
+            {session.firmware && <Text style={styles.meta}>{session.firmware.sizeBytes.toLocaleString()} bytes{`\n`}{session.firmware.sha256}{`\n`}Expected version: {session.expectedVersion ?? 'Not declared'}</Text>}
+            <Action label="Use 0.0.3 Firmware" icon="package" onPress={loadBundledFirmware} disabled={busy || active} />
             <Action label="Choose Firmware File" icon="folder" onPress={chooseFirmware} disabled={busy || active} secondary />
           </View>
 
@@ -209,6 +239,7 @@ export function OtaTestPanel({ visible, onClose }: Props) {
           {active && <Action label="Stop When Safe" icon="square" onPress={cancel} disabled={busy} secondary />}
           {session.phase === 'restarting' && <Action label="Reconnect and Verify" icon="check-circle" onPress={reconnectAndVerify} disabled={busy} />}
           {session.phase === 'reconnecting' && <Text style={styles.notice}>Waiting for the device firmware version…</Text>}
+          {session.phase === 'failed' && session.recoverableError && <Text style={styles.notice}>Power Somnara off, then on. Retry the update.</Text>}
           <Action label="Share Test Report" icon="share-2" onPress={shareReport} disabled={session.log.length === 0} secondary />
           <Text style={styles.warning}>Keep Somnara powered during transfer. A successful SDK callback is not final. The test passes only after reconnection and firmware version readback.</Text>
         </ScrollView>
