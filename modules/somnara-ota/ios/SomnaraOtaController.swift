@@ -15,12 +15,14 @@ struct OtaPeripheralRecord {
   let macAddress: String?
   let rawIdentity: String?
   let rssi: Int
+  let advertisedServiceUuids: [String]
 }
 
 final class SomnaraOtaController: NSObject {
   private let emit: ([String: Any?]) -> Void
   private lazy var central = CBCentralManager(delegate: self, queue: .main)
   private var scanCompletion: (([[String: Any?]]) -> Void)?
+  private var diagnosticCompletion: (([String: Any?]) -> Void)?
   private var discovered: [UUID: (CBPeripheral, OtaPeripheralRecord)] = [:]
   private var targetId: UUID?
   private var peripheral: CBPeripheral?
@@ -62,6 +64,20 @@ final class SomnaraOtaController: NSObject {
     central.scanForPeripherals(withServices: [somnaraService], options: [CBCentralManagerScanOptionAllowDuplicatesKey: true])
     DispatchQueue.main.asyncAfter(deadline: .now() + min(max(timeoutMs / 1000, 1), 20)) { [weak self] in
       self?.finishScan()
+    }
+  }
+
+  func scanDiagnostics(timeoutMs: Double, completion: @escaping ([String: Any?]) -> Void) {
+    let permission = CBCentralManager.authorization == .allowedAlways ? "granted" : "denied"
+    guard central.state == .poweredOn, permission == "granted" else {
+      completion(diagnosticResult(permission: permission, errorCode: permission == "granted" ? "BLUETOOTH_OFF" : "PERMISSION_DENIED"))
+      return
+    }
+    discovered.removeAll()
+    diagnosticCompletion = completion
+    central.scanForPeripherals(withServices: nil, options: [CBCentralManagerScanOptionAllowDuplicatesKey: true])
+    DispatchQueue.main.asyncAfter(deadline: .now() + min(max(timeoutMs / 1000, 1), 20)) { [weak self] in
+      self?.finishDiagnosticScan(permission: permission)
     }
   }
 
@@ -142,6 +158,35 @@ final class SomnaraOtaController: NSObject {
     }.sorted { ($0["rssi"] as? Int ?? -127) > ($1["rssi"] as? Int ?? -127) }
     scanCompletion?(values)
     scanCompletion = nil
+  }
+
+  private func diagnosticResult(permission: String, errorCode: String? = nil) -> [String: Any?] {
+    let values = discovered.values.map { (_, record) -> [String: Any?] in
+      let matches = record.advertisedServiceUuids.contains { CBUUID(string: $0) == somnaraService }
+      let matchesControl = record.advertisedServiceUuids.contains { CBUUID(string: $0) == CBUUID(string: "AE30") }
+      return [
+        "id": record.id, "name": record.name, "flashUuid": record.flashUuid,
+        "macAddress": record.macAddress, "rawIdentity": record.rawIdentity, "rssi": record.rssi,
+        "advertisedServiceUuids": record.advertisedServiceUuids, "matchesOtaFilter": matches,
+        "matchesControlFilter": matchesControl
+      ]
+    }.sorted { ($0["rssi"] as? Int ?? -127) > ($1["rssi"] as? Int ?? -127) }
+    return [
+      "timestamp": ISO8601DateFormatter().string(from: Date()),
+      "bluetoothState": central.state == .poweredOn ? "powered_on" : String(describing: central.state),
+      "permissionStatus": permission, "nativeErrorCode": errorCode,
+      "nativeErrorMessage": errorCode == nil ? nil : "Bluetooth scan could not start.",
+      "filteredCount": values.filter { $0["matchesOtaFilter"] as? Bool == true }.count,
+      "controlFilteredCount": values.filter { $0["matchesControlFilter"] as? Bool == true }.count,
+      "unfilteredCount": values.count, "devices": values
+    ]
+  }
+
+  private func finishDiagnosticScan(permission: String) {
+    guard let completion = diagnosticCompletion else { return }
+    central.stopScan()
+    diagnosticCompletion = nil
+    completion(diagnosticResult(permission: permission))
   }
 
   private func connect(_ next: CBPeripheral) {
@@ -234,6 +279,9 @@ final class SomnaraOtaController: NSObject {
 extension SomnaraOtaController: CBCentralManagerDelegate {
   func centralManagerDidUpdateState(_ central: CBCentralManager) {
     if central.state != .poweredOn, scanCompletion != nil { finishScan() }
+    if central.state != .poweredOn, diagnosticCompletion != nil {
+      finishDiagnosticScan(permission: CBCentralManager.authorization == .allowedAlways ? "granted" : "denied")
+    }
   }
 
   func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String: Any], rssi RSSI: NSNumber) {
@@ -245,7 +293,8 @@ extension SomnaraOtaController: CBCentralManagerDelegate {
       flashUuid: identity?.0,
       macAddress: identity?.1,
       rawIdentity: identity?.2,
-      rssi: RSSI.intValue
+      rssi: RSSI.intValue,
+      advertisedServiceUuids: (advertisementData[CBAdvertisementDataServiceUUIDsKey] as? [CBUUID] ?? []).map { $0.uuidString }
     )
     discovered[peripheral.identifier] = (peripheral, record)
     if peripheral.identifier == targetId { connect(peripheral) }

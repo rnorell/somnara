@@ -1,4 +1,4 @@
-import { FirmwareInspection, OtaDevice, OtaEvent, OtaSdkInfo } from 'somnara-ota';
+import { FirmwareInspection, OtaDevice, OtaEvent, OtaScanDiagnostic, OtaSdkInfo } from 'somnara-ota';
 
 export interface ApprovedFirmware {
   readonly fileName: string;
@@ -39,12 +39,13 @@ export interface OtaSession {
   errorCode: string | null;
   recoverableError: string | null;
   log: OtaLogEntry[];
+  scanDiagnostic: OtaScanDiagnostic | null;
 }
 
 export const initialOtaSession: OtaSession = {
   phase: 'idle', progress: 0, sdk: null, firmware: null, target: null,
   startedAt: null, finishedAt: null, expectedVersion: null, finalVersion: null,
-  errorCode: null, recoverableError: null, log: [],
+  errorCode: null, recoverableError: null, log: [], scanDiagnostic: null,
 };
 
 export function validateFirmware(inspection: FirmwareInspection, expectedSha256?: string): void {
@@ -114,6 +115,19 @@ export function createDiagnosticReport(session: OtaSession, osName: string, osVe
     `Result: ${session.phase}`,
     `Result code: ${session.errorCode ?? 'none'}`,
     `Final firmware version: ${session.finalVersion ?? 'not verified'}`,
+    '',
+    'Discovery diagnostic:',
+    `Checked: ${session.scanDiagnostic?.timestamp ?? 'not run'}`,
+    `Bluetooth state: ${session.scanDiagnostic?.bluetoothState ?? 'unknown'}`,
+    `Permission: ${session.scanDiagnostic?.permissionStatus ?? 'unknown'}`,
+    `Native scan error: ${session.scanDiagnostic?.nativeErrorCode ?? 'none'}`,
+    `Native scan message: ${session.scanDiagnostic?.nativeErrorMessage ?? 'none'}`,
+    `Would match AE00 filter: ${session.scanDiagnostic?.filteredCount ?? 'unknown'}`,
+    `Would match AE30 filter: ${session.scanDiagnostic?.controlFilteredCount ?? 'unknown'}`,
+    `All BLE devices found: ${session.scanDiagnostic?.unfilteredCount ?? 'unknown'}`,
+    ...(session.scanDiagnostic?.devices.map((device, index) => (
+      `Device ${index + 1}: ${device.name ?? 'unnamed'} | ${device.id} | RSSI ${device.rssi} | AE00 ${device.matchesOtaFilter ? 'yes' : 'no'} | AE30 ${device.matchesControlFilter ? 'yes' : 'no'} | Services ${device.advertisedServiceUuids.join(', ') || 'none advertised'}`
+    )) ?? []),
     '',
     'Event log:',
     ...session.log.map(entry => `${entry.timestamp} | ${entry.phase} | ${entry.progress}% | ${entry.code ?? 'OK'}${entry.message ? ` | ${entry.message}` : ''}`),

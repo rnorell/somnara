@@ -29,6 +29,24 @@ export interface OtaDevice {
   rssi: number;
 }
 
+export interface OtaScanDiagnosticDevice extends OtaDevice {
+  advertisedServiceUuids: string[];
+  matchesOtaFilter: boolean;
+  matchesControlFilter: boolean;
+}
+
+export interface OtaScanDiagnostic {
+  timestamp: string;
+  bluetoothState: string;
+  permissionStatus: string;
+  nativeErrorCode: string | null;
+  nativeErrorMessage: string | null;
+  filteredCount: number;
+  controlFilteredCount: number;
+  unfilteredCount: number;
+  devices: OtaScanDiagnosticDevice[];
+}
+
 export interface FirmwareInspection {
   uri: string;
   name: string;
@@ -54,6 +72,7 @@ type SomnaraOtaEvents = {
 declare class SomnaraOtaNativeModule extends NativeModule<SomnaraOtaEvents> {
   getSdkInfo(): Promise<OtaSdkInfo>;
   scanForOtaDevices(timeoutMs: number): Promise<OtaDevice[]>;
+  scanForOtaDiagnostics(timeoutMs: number): Promise<OtaScanDiagnostic>;
   inspectFirmware(uri: string): Promise<FirmwareInspection>;
   startUpdate(options: { deviceId: string; firmwareUri: string; expectedSha256: string }): Promise<void>;
   cancelUpdate(): Promise<boolean>;
@@ -63,6 +82,7 @@ const nativeModule = requireNativeModule<SomnaraOtaNativeModule>('SomnaraOta');
 
 export const getSdkInfo = () => nativeModule.getSdkInfo();
 export const scanForOtaDevices = (timeoutMs = 8_000) => nativeModule.scanForOtaDevices(timeoutMs);
+export const scanForOtaDiagnostics = (timeoutMs = 8_000) => nativeModule.scanForOtaDiagnostics(timeoutMs);
 export const inspectFirmware = (uri: string) => nativeModule.inspectFirmware(uri);
 export const startUpdate = (options: { deviceId: string; firmwareUri: string; expectedSha256: string }) => nativeModule.startUpdate(options);
 export const cancelUpdate = () => nativeModule.cancelUpdate();

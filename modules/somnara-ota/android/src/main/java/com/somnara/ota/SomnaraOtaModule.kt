@@ -48,6 +48,25 @@ class SomnaraOtaModule : Module() {
       }
     }
 
+    AsyncFunction("scanForOtaDiagnostics") { timeoutMs: Double, promise: Promise ->
+      val permissions = bluetoothPermissions()
+      val permissionStatus = if (permissions.all { ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED }) "granted" else "denied"
+      val manager = context.getSystemService(android.bluetooth.BluetoothManager::class.java)
+      val bluetoothState = when {
+        manager.adapter == null -> "unavailable"
+        manager.adapter.isEnabled -> "powered_on"
+        else -> "powered_off"
+      }
+      if (permissionStatus != "granted" || bluetoothState != "powered_on") {
+        val code = if (permissionStatus != "granted") "PERMISSION_DENIED" else "BLUETOOTH_OFF"
+        promise.resolve(diagnosticResult(bluetoothState, permissionStatus, code, emptyList()))
+      } else {
+        controller.scanDiagnostics(timeoutMs.toLong()) { devices, errorCode ->
+          promise.resolve(diagnosticResult(bluetoothState, permissionStatus, errorCode?.let { "ANDROID_SCAN_$it" }, devices))
+        }
+      }
+    }
+
     AsyncFunction("inspectFirmware") { uri: String ->
       val result = FirmwareFiles.inspect(context, uri)
       mapOf(
@@ -74,13 +93,38 @@ class SomnaraOtaModule : Module() {
   }
 
   private fun requireBluetoothPermissions() {
-    val permissions = if (Build.VERSION.SDK_INT >= 31) {
+    val permissions = bluetoothPermissions()
+    check(permissions.all { ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED }) {
+      "Bluetooth permission is required."
+    }
+  }
+
+  private fun bluetoothPermissions() = if (Build.VERSION.SDK_INT >= 31) {
       listOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)
     } else {
       listOf(Manifest.permission.ACCESS_FINE_LOCATION)
     }
-    check(permissions.all { ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED }) {
-      "Bluetooth permission is required."
+
+  private fun diagnosticResult(bluetoothState: String, permissionStatus: String, errorCode: String?, devices: List<ScannedOtaDevice>): Map<String, Any?> {
+    val mapped = devices.map { device ->
+      val matchesOta = device.advertisedServiceUuids.any { it.equals("0000AE00-0000-1000-8000-00805F9B34FB", ignoreCase = true) }
+      val matchesControl = device.advertisedServiceUuids.any { it.equals("0000AE30-0000-1000-8000-00805F9B34FB", ignoreCase = true) }
+      mapOf(
+        "id" to device.id, "name" to device.name, "flashUuid" to device.identity?.flashUuid,
+        "macAddress" to device.identity?.macAddress, "rawIdentity" to device.identity?.rawIdentity,
+        "rssi" to device.rssi, "advertisedServiceUuids" to device.advertisedServiceUuids,
+        "matchesOtaFilter" to matchesOta, "matchesControlFilter" to matchesControl
+      )
     }
+    return mapOf(
+      "timestamp" to java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).apply {
+        timeZone = java.util.TimeZone.getTimeZone("UTC")
+      }.format(java.util.Date()), "bluetoothState" to bluetoothState,
+      "permissionStatus" to permissionStatus, "nativeErrorCode" to errorCode,
+      "nativeErrorMessage" to if (errorCode == null) null else "Bluetooth scan failed.",
+      "filteredCount" to mapped.count { it["matchesOtaFilter"] == true },
+      "controlFilteredCount" to mapped.count { it["matchesControlFilter"] == true },
+      "unfilteredCount" to mapped.size, "devices" to mapped
+    )
   }
 }

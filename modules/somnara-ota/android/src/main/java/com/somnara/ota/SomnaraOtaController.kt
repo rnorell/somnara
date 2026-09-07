@@ -34,7 +34,8 @@ data class ScannedOtaDevice(
   val id: String,
   val name: String?,
   val identity: OtaIdentity?,
-  val rssi: Int
+  val rssi: Int,
+  val advertisedServiceUuids: List<String> = emptyList()
 )
 
 class SomnaraOtaController(
@@ -87,6 +88,47 @@ class SomnaraOtaController(
     mainHandler.postDelayed({
       scanner.stopScan(callback)
       complete(devices.values.sortedByDescending { it.rssi })
+    }, timeoutMs.coerceIn(1_000L, 20_000L))
+  }
+
+  @SuppressLint("MissingPermission")
+  fun scanDiagnostics(timeoutMs: Long, complete: (List<ScannedOtaDevice>, Int?) -> Unit) {
+    val scanner = adapter?.bluetoothLeScanner
+    if (scanner == null) {
+      complete(emptyList(), -1)
+      return
+    }
+    val devices = linkedMapOf<String, ScannedOtaDevice>()
+    var completed = false
+    val callback = object : ScanCallback() {
+      override fun onScanResult(callbackType: Int, result: ScanResult) {
+        val record = result.scanRecord
+        var identity: OtaIdentity? = null
+        record?.manufacturerSpecificData?.let { values ->
+          for (index in 0 until values.size()) identity = OtaIdentityParser.parse(values.valueAt(index)) ?: identity
+        }
+        devices[result.device.address] = ScannedOtaDevice(
+          id = result.device.address,
+          name = result.device.name ?: record?.deviceName,
+          identity = identity,
+          rssi = result.rssi,
+          advertisedServiceUuids = record?.serviceUuids?.map { it.uuid.toString().uppercase() } ?: emptyList()
+        )
+      }
+
+      override fun onScanFailed(errorCode: Int) {
+        if (completed) return
+        completed = true
+        complete(devices.values.sortedByDescending { it.rssi }, errorCode)
+      }
+    }
+    val settings = ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build()
+    scanner.startScan(null, settings, callback)
+    mainHandler.postDelayed({
+      if (completed) return@postDelayed
+      completed = true
+      scanner.stopScan(callback)
+      complete(devices.values.sortedByDescending { it.rssi }, null)
     }, timeoutMs.coerceIn(1_000L, 20_000L))
   }
 

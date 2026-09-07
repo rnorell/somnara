@@ -8,7 +8,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import {
   addOtaListener, cancelUpdate, getSdkInfo, inspectFirmware, OtaDevice,
-  scanForOtaDevices, startUpdate,
+  scanForOtaDevices, scanForOtaDiagnostics, startUpdate,
 } from 'somnara-ota';
 import { colors, radii, spacing, typography } from '../theme';
 import { useBleConnection } from '../ble/useBleConnection';
@@ -138,6 +138,25 @@ export function OtaTestPanel({ visible, onClose }: Props) {
     });
   }
 
+  function runDiagnosticScan() {
+    return run(async () => {
+      const sdk = await getSdkInfo();
+      const diagnostic = await scanForOtaDiagnostics();
+      const matches = diagnostic.devices.filter(device => device.matchesOtaFilter);
+      setDevices(matches);
+      setSession(current => ({
+        ...current,
+        sdk,
+        scanDiagnostic: diagnostic,
+        target: matches.length === 1 ? matches[0] : current.target,
+      }));
+      Alert.alert(
+        'Scan diagnostic complete',
+        `${diagnostic.filteredCount} AE00 match${diagnostic.filteredCount === 1 ? '' : 'es'} from ${diagnostic.unfilteredCount} nearby BLE device${diagnostic.unfilteredCount === 1 ? '' : 's'}.`,
+      );
+    });
+  }
+
   function confirmStart() {
     if (!session.firmware || !session.target) {
       Alert.alert('Select the test inputs', 'Choose a UFW file and select the correct Somnara.');
@@ -216,6 +235,17 @@ export function OtaTestPanel({ visible, onClose }: Props) {
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Target device</Text>
             <Action label="Scan for Somnara" icon="bluetooth" onPress={scan} disabled={busy || active} />
+            <Action label="Run Scan Diagnostic" icon="activity" onPress={runDiagnosticScan} disabled={busy || active} secondary />
+            {session.scanDiagnostic ? (
+              <Text style={styles.meta}>
+                Bluetooth: {session.scanDiagnostic.bluetoothState}{'\n'}
+                Permission: {session.scanDiagnostic.permissionStatus}{'\n'}
+                AE00 matches: {session.scanDiagnostic.filteredCount}{'\n'}
+                AE30 matches: {session.scanDiagnostic.controlFilteredCount}{'\n'}
+                All nearby BLE devices: {session.scanDiagnostic.unfilteredCount}{'\n'}
+                Native error: {session.scanDiagnostic.nativeErrorCode ?? 'none'}
+              </Text>
+            ) : null}
             {devices.map(device => (
               <TouchableOpacity key={device.id} accessibilityRole="button" accessibilityState={{ selected: session.target?.id === device.id }} style={[styles.device, session.target?.id === device.id && styles.deviceSelected]} onPress={() => setSession(current => ({ ...current, target: device }))}>
                 <Text style={styles.value}>{device.name ?? 'Somnara'}</Text>
@@ -240,7 +270,7 @@ export function OtaTestPanel({ visible, onClose }: Props) {
           {session.phase === 'restarting' && <Action label="Reconnect and Verify" icon="check-circle" onPress={reconnectAndVerify} disabled={busy} />}
           {session.phase === 'reconnecting' && <Text style={styles.notice}>Waiting for the device firmware version…</Text>}
           {session.phase === 'failed' && session.recoverableError && <Text style={styles.notice}>Power Somnara off, then on. Retry the update.</Text>}
-          <Action label="Share Test Report" icon="share-2" onPress={shareReport} disabled={session.log.length === 0} secondary />
+          <Action label="Share Test Report" icon="share-2" onPress={shareReport} disabled={session.log.length === 0 && !session.scanDiagnostic} secondary />
           <Text style={styles.warning}>Keep Somnara powered during transfer. A successful SDK callback is not final. The test passes only after reconnection and firmware version readback.</Text>
         </ScrollView>
       </View>

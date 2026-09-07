@@ -17,6 +17,10 @@ public final class SomnaraOtaModule: Module {
       self.controller.scan(timeoutMs: timeoutMs) { devices in promise.resolve(devices) }
     }.runOnQueue(.main)
 
+    AsyncFunction("scanForOtaDiagnostics") { (timeoutMs: Double, promise: Promise) in
+      self.controller.scanDiagnostics(timeoutMs: timeoutMs) { result in promise.resolve(result) }
+    }.runOnQueue(.main)
+
     AsyncFunction("inspectFirmware") { (uri: String) throws -> [String: Any?] in
       try self.controller.inspectFirmware(uri: uri)
     }

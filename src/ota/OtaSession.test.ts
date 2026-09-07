@@ -4,6 +4,7 @@ import {
   beginReconnection,
   canUseOta,
   confirmVersionReadback,
+  createDiagnosticReport,
   initialOtaSession,
   validateFirmware,
 } from './OtaSession';
@@ -42,5 +43,19 @@ describe('OTA session', () => {
   it('never enables OTA in production', () => {
     expect(canUseOta(true, true)).toBe(false);
     expect(canUseOta(true, false)).toBe(true);
+  });
+  it('includes failed discovery evidence in a shareable report', () => {
+    const report = createDiagnosticReport({
+      ...initialOtaSession,
+      scanDiagnostic: {
+        timestamp: '2026-09-07T12:00:00Z', bluetoothState: 'powered_on', permissionStatus: 'granted',
+        nativeErrorCode: null, nativeErrorMessage: null, filteredCount: 0, controlFilteredCount: 0, unfilteredCount: 1,
+        devices: [{ id: 'device-1', name: 'JL Device', flashUuid: null, macAddress: null, rawIdentity: null, rssi: -42, advertisedServiceUuids: [], matchesOtaFilter: false, matchesControlFilter: false }],
+      },
+    }, 'android', 36);
+    expect(report).toContain('Would match AE00 filter: 0');
+    expect(report).toContain('Would match AE30 filter: 0');
+    expect(report).toContain('All BLE devices found: 1');
+    expect(report).toContain('AE00 no');
   });
 });
