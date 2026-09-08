@@ -121,3 +121,91 @@ describe('useBleConnection', () => {
     await unmount();
   });
 });
+
+function nativeTestTransport() {
+  const transport = new MockBleTransport();
+  Object.defineProperty(transport, 'kind', { value: 'native' });
+  return transport;
+}
+
+describe('native onboarding readiness', () => {
+  it('waits for valid status before allowing native setup to continue', async () => {
+    const transport = nativeTestTransport();
+    const { result, unmount } = await renderHook(() => useBleConnection(() => transport));
+    await act(async () => { await result.current.connect(); });
+    expect(result.current.state).toBe('connected_unverified');
+    await act(async () => { transport.emitNotification(new Uint8Array([0xFF])); });
+    expect(result.current.state).toBe('connected_unverified');
+    await act(async () => { transport.emitNotification(automaticStatusFrame()); });
+    expect(result.current.state).toBe('ready');
+    expect(result.current.deviceStatus.isConnected).toBe(true);
+    await unmount();
+  });
+
+  it('does not overwrite status received while subscribing', async () => {
+    const transport = nativeTestTransport();
+    const subscribe = transport.subscribe.bind(transport);
+    jest.spyOn(transport, 'subscribe').mockImplementation((onData, onError) => {
+      const unsubscribe = subscribe(onData, onError);
+      onData(automaticStatusFrame());
+      return unsubscribe;
+    });
+    const { result, unmount } = await renderHook(() => useBleConnection(() => transport));
+    await act(async () => { await result.current.connect(); });
+    expect(result.current.state).toBe('ready');
+    await unmount();
+  });
+
+  it('times out a silent device and permits another attempt', async () => {
+    jest.useFakeTimers();
+    const transport = nativeTestTransport();
+    const { result, unmount } = await renderHook(() => useBleConnection(() => transport));
+    await act(async () => { await result.current.connect(); });
+    await act(async () => { jest.advanceTimersByTime(20_000); });
+    expect(result.current.state).toBe('failed');
+    expect(result.current.error).toContain('did not send its status');
+    await act(async () => { await result.current.connect(); });
+    await act(async () => { transport.emitNotification(automaticStatusFrame()); });
+    expect(result.current.state).toBe('ready');
+    await unmount();
+    jest.useRealTimers();
+  });
+
+  it('clears live device status when disconnected', async () => {
+    const transport = nativeTestTransport();
+    const { result, unmount } = await renderHook(() => useBleConnection(() => transport));
+    await act(async () => { await result.current.connect(); });
+    await act(async () => { transport.emitNotification(automaticStatusFrame()); });
+    await act(async () => { await result.current.disconnect(); });
+    expect(result.current.deviceStatus.isConnected).toBe(false);
+    expect(result.current.latestStatus).toBeNull();
+    expect(result.current.state).toBe('disconnected');
+    await unmount();
+  });
+
+  it('does not start a scan after cancellation during permission request', async () => {
+    const transport = nativeTestTransport();
+    let grant!: (value: boolean) => void;
+    jest.spyOn(transport, 'requestPermissions').mockReturnValue(new Promise(resolve => { grant = resolve; }));
+    const scan = jest.spyOn(transport, 'scan');
+    const { result, unmount } = await renderHook(() => useBleConnection(() => transport));
+    let pending!: Promise<void>;
+    await act(async () => { pending = result.current.connect(); });
+    await act(async () => { await result.current.disconnect(); });
+    await act(async () => { grant(true); await pending; });
+    expect(scan).not.toHaveBeenCalled();
+    expect(result.current.state).toBe('disconnected');
+    await unmount();
+  });
+
+  it('clears ready status after a connection error', async () => {
+    const transport = nativeTestTransport();
+    const { result, unmount } = await renderHook(() => useBleConnection(() => transport));
+    await act(async () => { await result.current.connect(); });
+    await act(async () => { transport.emitNotification(automaticStatusFrame()); });
+    await act(async () => { transport.emitError(new Error('Device disconnected')); });
+    expect(result.current.state).toBe('failed');
+    expect(result.current.deviceStatus.isConnected).toBe(false);
+    await unmount();
+  });
+});

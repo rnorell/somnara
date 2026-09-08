@@ -56,10 +56,11 @@ class SomnaraOtaController(
   private var cancelAllowed = false
 
   @SuppressLint("MissingPermission")
-  fun scan(timeoutMs: Long, complete: (List<ScannedOtaDevice>) -> Unit) {
+  fun scan(timeoutMs: Long, complete: (List<ScannedOtaDevice>, Int?) -> Unit) {
     require(adapter?.isEnabled == true) { "Turn on Bluetooth and try again." }
     val scanner = requireNotNull(adapter.bluetoothLeScanner) { "Bluetooth scanning is unavailable." }
     val devices = linkedMapOf<String, ScannedOtaDevice>()
+    var completed = false
     val callback = object : ScanCallback() {
       override fun onScanResult(callbackType: Int, result: ScanResult) {
         val record = result.scanRecord
@@ -78,16 +79,20 @@ class SomnaraOtaController(
       }
 
       override fun onScanFailed(errorCode: Int) {
+        if (completed) return
+        completed = true
         scanner.stopScan(this)
-        complete(emptyList())
+        complete(emptyList(), errorCode)
       }
     }
     val filter = ScanFilter.Builder().setServiceUuid(ParcelUuid(SERVICE_UUID)).build()
     val settings = ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build()
     scanner.startScan(listOf(filter), settings, callback)
     mainHandler.postDelayed({
+      if (completed) return@postDelayed
+      completed = true
       scanner.stopScan(callback)
-      complete(devices.values.sortedByDescending { it.rssi })
+      complete(devices.values.sortedByDescending { it.rssi }, null)
     }, timeoutMs.coerceIn(1_000L, 20_000L))
   }
 

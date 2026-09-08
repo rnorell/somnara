@@ -7,32 +7,18 @@ import { AlarmListReport, DeviceStatusReport, dispatchUplinkNotification, MINIMU
 import { DeviceStatus } from '../models/Device';
 import { applyBleStatusReport, initialDeviceStatus } from '../state/deviceStore';
 
-interface BleConnectionResult {
-  state: BleConnectionState;
-  error: string | null;
-  protocolError: BleProtocolError | null;
-  latestStatus: DeviceStatusReport | null;
-  latestAlarmList: AlarmListReport | null;
-  deviceStatus: DeviceStatus;
-  connect: () => Promise<void>;
-  disconnect: () => Promise<void>;
-}
-
-function stateForError(error: unknown): BleConnectionState {
-  return error instanceof BleTransportError && error.code === 'permission_required'
-    ? 'permission_required'
-    : 'failed';
-}
-
 export function stateAfterConnection(kind: BleTransport['kind'], allowMockReady: boolean): BleConnectionState {
   return kind === 'mock' && allowMockReady ? 'ready' : 'connected_unverified';
 }
 
-export function useBleConnection(transportFactory: () => BleTransport = createBleTransport): BleConnectionResult {
+export function useBleConnection(transportFactory: () => BleTransport = createBleTransport) {
   const transportRef = useRef<BleTransport | null>(null);
   const transportFactoryRef = useRef(transportFactory);
   const unsubscribeRef = useRef<(() => void) | null>(null);
-  const activeRef = useRef(true);
+  const activeRef = useRef(false);
+  const attemptRef = useRef(0);
+  const connectingRef = useRef(false);
+  const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [state, setState] = useState<BleConnectionState>('idle');
   const [error, setError] = useState<string | null>(null);
   const [protocolError, setProtocolError] = useState<BleProtocolError | null>(null);
@@ -41,84 +27,123 @@ export function useBleConnection(transportFactory: () => BleTransport = createBl
   const [deviceStatus, setDeviceStatus] = useState<DeviceStatus>(initialDeviceStatus);
   const controllerRef = useRef<AckTransactionController | null>(null);
 
-  const disconnect = useCallback(async () => {
+  const clearStatusTimer = useCallback(() => {
+    if (statusTimerRef.current) clearTimeout(statusTimerRef.current);
+    statusTimerRef.current = null;
+  }, []);
+
+  const clearSession = useCallback(() => {
+    clearStatusTimer();
     unsubscribeRef.current?.();
     unsubscribeRef.current = null;
     controllerRef.current = null;
+  }, [clearStatusTimer]);
+
+  const disconnect = useCallback(async () => {
+    ++attemptRef.current;
+    clearSession();
+    if (activeRef.current) {
+      setState('disconnected');
+      setDeviceStatus(initialDeviceStatus);
+      setLatestStatus(null);
+      setLatestAlarmList(null);
+      setError(null);
+      setProtocolError(null);
+    }
     await transportRef.current?.disconnect();
-    if (activeRef.current) setState('disconnected');
-  }, []);
+  }, [clearSession]);
 
   const connect = useCallback(async () => {
     const transport = transportRef.current;
-    if (!transport) return;
+    if (!transport || connectingRef.current) return;
+    connectingRef.current = true;
+    const attempt = ++attemptRef.current;
+    const current = () => activeRef.current && attemptRef.current === attempt;
+    clearSession();
     setError(null);
     setProtocolError(null);
     setLatestStatus(null);
     setLatestAlarmList(null);
+    setDeviceStatus(initialDeviceStatus);
+    setState('scanning');
+    const fail = (failure: unknown) => {
+      if (!current()) return;
+      ++attemptRef.current;
+      clearSession();
+      setDeviceStatus(initialDeviceStatus);
+      setLatestStatus(null);
+      setLatestAlarmList(null);
+      setError(failure instanceof Error ? failure.message : 'Could not connect to Somnara.');
+      setState(failure instanceof BleTransportError && failure.code === 'permission_required' ? 'permission_required' : 'failed');
+      void transport.disconnect().catch(() => undefined);
+    };
     try {
+      await transport.disconnect();
+      if (!current()) return;
       const permitted = await transport.requestPermissions();
-      if (!permitted) {
-        setState('permission_required');
-        return;
-      }
-      setState('scanning');
+      if (!current()) return;
+      if (!permitted) throw new BleTransportError('permission_required', 'Allow Bluetooth access in Settings, then try again.');
       const candidate = await transport.scan();
-      if (!activeRef.current) return;
+      if (!current()) return;
       setState('connecting');
       await transport.connect(candidate.id);
-      if (!activeRef.current) return;
+      if (!current()) { await transport.disconnect(); return; }
       await transport.negotiateMtu(MINIMUM_ALARM_LIST_MTU);
-      if (!activeRef.current) return;
+      if (!current()) { await transport.disconnect(); return; }
       controllerRef.current = new AckTransactionController(
         bytes => transport.writeRaw(bytes),
-        { onProtocolError: nextError => activeRef.current && setProtocolError(nextError) },
+        { onProtocolError: nextError => current() && setProtocolError(nextError) },
       );
-      unsubscribeRef.current = transport.subscribe(
+      // Set the waiting state first: a synchronous status callback must not be overwritten.
+      const nextState = stateAfterConnection(transport.kind, __DEV__);
+      setState(nextState);
+      if (nextState === 'connected_unverified') {
+        statusTimerRef.current = setTimeout(() => fail(new Error('Somnara connected but did not send its status. Accept any pairing prompt and try again.')), 20_000);
+      }
+      const unsubscribe = transport.subscribe(
         bytes => {
+          if (!current()) return;
           const controller = controllerRef.current;
           if (!controller) return;
           try {
             const notification = dispatchUplinkNotification(bytes, controller);
             if (notification.kind === 'status') {
+              clearStatusTimer();
               setLatestStatus(notification.status);
-              setDeviceStatus(current => applyBleStatusReport(current, notification.status));
+              setDeviceStatus(previous => applyBleStatusReport(previous, notification.status));
               setProtocolError(null);
+              setState('ready');
             } else if (notification.kind === 'alarm_list') {
               setLatestAlarmList(notification.alarmList);
               setProtocolError(null);
             }
-          } catch (protocolFailure) {
-            if (activeRef.current && protocolFailure instanceof BleProtocolError) {
-              setProtocolError(protocolFailure);
-            }
+          } catch (failure) {
+            if (failure instanceof BleProtocolError) setProtocolError(failure);
           }
         },
-        notificationError => {
-          if (!activeRef.current) return;
-          setError(notificationError.message);
-          setState('failed');
-        },
+        fail,
       );
-      setState(stateAfterConnection(transport.kind, __DEV__));
-    } catch (connectionError) {
-      if (!activeRef.current) return;
-      setError(connectionError instanceof Error ? connectionError.message : 'Could not connect to Somnara.');
-      setState(stateForError(connectionError));
+      if (current()) unsubscribeRef.current = unsubscribe;
+      else unsubscribe();
+    } catch (failure) {
+      fail(failure);
+    } finally {
+      connectingRef.current = false;
     }
-  }, []);
+  }, [clearSession, clearStatusTimer]);
 
   useEffect(() => {
+    activeRef.current = true;
     const transport = transportFactoryRef.current();
     transportRef.current = transport;
     return () => {
       activeRef.current = false;
-      unsubscribeRef.current?.();
-      controllerRef.current = null;
-      void transport.destroy();
+      ++attemptRef.current;
+      clearSession();
+      void transport.destroy().catch(() => undefined);
       transportRef.current = null;
     };
-  }, []);
+  }, [clearSession]);
 
   return { state, error, protocolError, latestStatus, latestAlarmList, deviceStatus, connect, disconnect };
 }

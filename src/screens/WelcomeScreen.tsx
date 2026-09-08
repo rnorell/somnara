@@ -8,18 +8,16 @@ import { StatusCard } from '../components/StatusCard';
 import { Button } from '../components/Button';
 import { NextAlarmCard } from '../components/NextAlarmCard';
 import { AlarmsTab } from '../components/AlarmsTab';
-import { SleepTonightButton } from '../components/SleepTonightButton';
 import { SunriseDurationPicker } from '../components/SunriseDurationPicker';
 import { DeviceOwnershipCard } from '../components/DeviceOwnershipCard';
 import { SyncStatusCard } from '../components/SyncStatusCard';
 import { ClockReliabilityWarning } from '../components/ClockReliabilityWarning';
 import { useGreeting } from '../hooks/useGreeting';
-import { useDeviceStore } from '../state/deviceStore';
+import { useSharedBleConnection } from '../context/BleContext';
 import { useSyncContext } from '../context/SyncContext';
 import { HelpScreen } from './HelpScreen';
 import { ClaimedDevice } from '../models/Device';
 import { SomnaraLogo } from '../components/SomnaraLogo';
-import { isProduction } from '../lib/env';
 import { isOtaTestEnabled } from '../lib/env';
 import { OtaTestPanel } from '../components/OtaTestPanel';
 
@@ -43,7 +41,8 @@ interface WelcomeScreenProps {
 
 export function WelcomeScreen({ claimedDevice, onDeviceReset, onSignOut, onDeleteAccount }: WelcomeScreenProps) {
   const greeting = useGreeting();
-  const { device, connect, disconnect, togglePower } = useDeviceStore();
+  const { deviceStatus: device, state, error, connect, disconnect } = useSharedBleConnection();
+  const busy = state === 'scanning' || state === 'connecting' || state === 'connected_unverified';
   const { preferences, setPreferences } = useSyncContext();
   const [activeTab, setActiveTab] = useState<Tab>('Home');
   const [showHelp, setShowHelp] = useState(false);
@@ -83,7 +82,7 @@ export function WelcomeScreen({ claimedDevice, onDeviceReset, onSignOut, onDelet
           </View>
 
           <View style={styles.illustration}>
-            <DeviceIllustration isOn={!isProduction && device.isOn} />
+            <DeviceIllustration isOn={device.isConnected && device.isOn} />
           </View>
 
           <Text style={styles.greeting}>{greeting}</Text>
@@ -117,29 +116,24 @@ export function WelcomeScreen({ claimedDevice, onDeviceReset, onSignOut, onDelet
           {activeTab === 'Home' && (
             <View style={styles.content}>
               {device.clockValidity === 'invalid' && <ClockReliabilityWarning />}
-              <StatusCard device={device} unavailable={isProduction} />
+              <StatusCard device={device} />
               <NextAlarmCard />
-              <SleepTonightButton />
-              {isProduction ? (
-                <View style={styles.comingSoonRow}>
-                  <Feather name="bluetooth" size={16} color={colors.text.tertiary} />
-                  <Text style={styles.comingSoonText}>Device pairing and controls are coming soon</Text>
-                </View>
-              ) : (
-                <View style={styles.buttons}>
-                  <Button
-                    label={device.isConnected ? 'Disconnect' : 'Connect Device'}
-                    onPress={device.isConnected ? disconnect : connect}
-                    variant="primary"
-                  />
-                  <Button
-                    label={device.isOn ? 'Turn Off' : 'Turn On'}
-                    onPress={togglePower}
-                    variant="secondary"
-                    style={styles.secondaryBtn}
-                  />
-                </View>
-              )}
+
+              <View style={styles.buttons}>
+                <Text accessibilityLiveRegion="polite" style={styles.comingSoonText}>
+                  {error ?? (state === 'ready' ? 'Connected to Somnara'
+                    : state === 'scanning' ? 'Looking for Somnara…'
+                    : state === 'connecting' ? 'Connecting…'
+                    : state === 'connected_unverified' ? 'Waiting for device status…'
+                    : 'Somnara is disconnected')}
+                </Text>
+                <Button
+                  label={busy ? 'Cancel connection' : device.isConnected ? 'Disconnect' : 'Connect Device'}
+                  onPress={() => { void (busy || device.isConnected ? disconnect() : connect()); }}
+                  variant="primary"
+                />
+                <Text style={styles.comingSoonText}>Device status is live. Power controls and alarm transfer are not available yet.</Text>
+              </View>
             </View>
           )}
 
