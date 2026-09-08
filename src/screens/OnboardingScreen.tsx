@@ -15,7 +15,7 @@ import { colors, typography, spacing, radii } from '../theme';
 import { DeviceIllustration } from '../components/DeviceIllustration';
 import { SunriseDurationPicker } from '../components/SunriseDurationPicker';
 import { useSyncContext } from '../context/SyncContext';
-import { useBleConnection } from '../ble/useBleConnection';
+import { useSharedBleConnection } from '../context/BleContext';
 
 const { width: W, height: H } = Dimensions.get('window');
 const DAY_LABELS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
@@ -120,7 +120,7 @@ function PowerOnStep({ onNext }: { onNext: () => void }) {
 
 // ─── Step 2: Bluetooth ────────────────────────────────────────────────────────
 function BluetoothStep({ onNext }: { onNext: () => void }) {
-  const { state, error, connect } = useBleConnection();
+  const { state, error, connect, disconnect } = useSharedBleConnection();
 
   const ring1 = useSharedValue(1);
   const ring2 = useSharedValue(1);
@@ -153,14 +153,14 @@ function BluetoothStep({ onNext }: { onNext: () => void }) {
       : state === 'connecting'
         ? 'Connecting…'
         : state === 'ready'
-          ? 'Development device ready'
+          ? 'Somnara ready'
           : state === 'connected_unverified'
             ? 'Somnara connected'
             : state === 'permission_required'
               ? 'Bluetooth permission required'
               : 'Connection stopped';
   const message = state === 'connected_unverified'
-    ? 'If your phone asks to bond, accept the prompt. It starts after Notify is enabled or after the first data packet.'
+    ? 'Waiting for your Somnara to report its status. Accept the Bluetooth pairing prompt if one appears.'
     : state === 'permission_required'
       ? 'Allow Bluetooth access, then try again.'
       : error ?? 'Keep your phone near Somnara. The bonding prompt starts after the first secure data exchange.';
@@ -184,6 +184,11 @@ function BluetoothStep({ onNext }: { onNext: () => void }) {
           <FadeIn delay={400}>
             <Text style={s.stepSub}>{message}</Text>
           </FadeIn>
+          {state === 'connected_unverified' && (
+            <TouchableOpacity style={s.nextBtn} onPress={() => { void disconnect(); }} accessibilityRole="button">
+              <Text style={s.nextBtnText}>Cancel connection</Text>
+            </TouchableOpacity>
+          )}
           {!busy && state !== 'connected_unverified' && (
             <FadeIn delay={500}>
               <TouchableOpacity

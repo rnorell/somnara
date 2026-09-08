@@ -1,5 +1,7 @@
-import { PermissionsAndroid, Platform } from 'react-native';
+import { Platform } from 'react-native';
 import { BleManager, Device, State, Subscription } from 'react-native-ble-plx';
+import { requestBluetoothPermissions } from './requestBluetoothPermissions';
+import { waitForBluetooth } from './waitForBluetooth';
 import { base64ToBytes, bytesToBase64 } from './base64';
 import {
   BleDeviceCandidate,
@@ -16,49 +18,38 @@ export class NativeBleTransport implements BleTransport {
   private connectedDevice: Device | null = null;
   private notification: Subscription | null = null;
   private destroyed = false;
+  private cancelScan: (() => void) | null = null;
 
   async requestPermissions(): Promise<boolean> {
-    if (Platform.OS !== 'android') return true;
-
-    const apiLevel = typeof Platform.Version === 'number'
-      ? Platform.Version
-      : Number.parseInt(String(Platform.Version), 10);
-
-    if (apiLevel < 23) return true;
-
-    const permissions = apiLevel >= 31
-      ? [PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN, PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT]
-      : [PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION];
-    const result = await PermissionsAndroid.requestMultiple(permissions);
-    return permissions.every(permission => result[permission] === PermissionsAndroid.RESULTS.GRANTED);
+    return requestBluetoothPermissions();
   }
 
   async scan(timeoutMs = 10_000): Promise<BleDeviceCandidate> {
     this.assertActive();
-    const state = await this.manager.state();
-    if (state === State.Unauthorized) {
-      throw new BleTransportError('permission_required', 'Bluetooth permission is required.');
-    }
-    if (state !== State.PoweredOn) {
-      throw new BleTransportError('bluetooth_off', 'Turn on Bluetooth and try again.');
-    }
+    await waitForBluetooth(this.manager);
+    this.assertActive();
 
     return new Promise((resolve, reject) => {
       let settled = false;
+      let stateSubscription: Subscription | undefined;
       const finish = (action: () => void) => {
         if (settled) return;
         settled = true;
         clearTimeout(timeout);
+        this.cancelScan = null;
         this.manager.stopDeviceScan().catch(() => undefined);
-        stateSubscription.remove();
+        stateSubscription?.remove();
         action();
       };
+      this.cancelScan?.();
+      this.cancelScan = () => finish(() => reject(new BleTransportError('operation_cancelled', 'Bluetooth scan cancelled.')));
       const timeout = setTimeout(() => {
-        finish(() => reject(new BleTransportError('scan_timeout', 'No Somnara was found.')));
+        finish(() => reject(new BleTransportError('scan_timeout', 'No Somnara was found. Keep it powered and nearby. On Android 11 or earlier, also turn on Location.')));
       }, timeoutMs);
-      const stateSubscription = this.manager.onStateChange(nextState => {
-        if (nextState === State.PoweredOff) {
-          finish(() => reject(new BleTransportError('bluetooth_off', 'Bluetooth was turned off.')));
+      stateSubscription = this.manager.onStateChange(nextState => {
+        if (nextState === State.PoweredOff || nextState === State.Unauthorized) {
+          const denied = nextState === State.Unauthorized;
+          finish(() => reject(new BleTransportError(denied ? 'permission_required' : 'bluetooth_off', denied ? 'Bluetooth permission is required.' : 'Bluetooth was turned off.')));
         }
       }, false);
 
@@ -78,7 +69,12 @@ export class NativeBleTransport implements BleTransport {
   async connect(deviceId: string): Promise<void> {
     this.assertActive();
     try {
-      const device = await this.manager.connectToDevice(deviceId, { autoConnect: false });
+      const device = await this.manager.connectToDevice(deviceId, { autoConnect: false, timeout: 15_000 });
+      if (this.destroyed) {
+        await device.cancelConnection().catch(() => undefined);
+        this.assertActive();
+      }
+      this.connectedDevice = device;
       this.connectedDevice = await device.discoverAllServicesAndCharacteristics();
     } catch (error) {
       throw new BleTransportError(
@@ -89,6 +85,7 @@ export class NativeBleTransport implements BleTransport {
   }
 
   async disconnect(): Promise<void> {
+    this.cancelScan?.();
     this.notification?.remove();
     this.notification = null;
     const deviceId = this.connectedDevice?.id;
@@ -149,8 +146,8 @@ export class NativeBleTransport implements BleTransport {
 
   async destroy(): Promise<void> {
     if (this.destroyed) return;
-    await this.disconnect();
     this.destroyed = true;
+    await this.disconnect();
     await this.manager.destroy();
   }
 

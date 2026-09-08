@@ -11,7 +11,8 @@ import {
   scanForOtaDevices, scanForOtaDiagnostics, startUpdate,
 } from 'somnara-ota';
 import { colors, radii, spacing, typography } from '../theme';
-import { useBleConnection } from '../ble/useBleConnection';
+import { requestBluetoothPermissions } from '../ble/requestBluetoothPermissions';
+import { useSharedBleConnection } from '../context/BleContext';
 import {
   applyOtaEvent, approvedFirmwareFor, beginReconnection, BUNDLED_FIRMWARE as BUNDLED_FIRMWARE_RECORD,
   BUNDLED_FIRMWARE_SHA256, confirmVersionReadback, createDiagnosticReport, initialOtaSession,
@@ -42,7 +43,7 @@ export function OtaTestPanel({ visible, onClose }: Props) {
   const [session, setSession] = useState<OtaSession>(initialOtaSession);
   const [devices, setDevices] = useState<OtaDevice[]>([]);
   const [busy, setBusy] = useState(false);
-  const normalBle = useBleConnection();
+  const normalBle = useSharedBleConnection();
 
   useEffect(() => {
     const subscription = addOtaListener(event => {
@@ -130,16 +131,20 @@ export function OtaTestPanel({ visible, onClose }: Props) {
 
   function scan() {
     return run(async () => {
+      await normalBle.disconnect();
+      if (!await requestBluetoothPermissions()) throw new Error('BLUETOOTH_PERMISSION_REQUIRED');
       const sdk = await getSdkInfo();
       const found = await scanForOtaDevices();
       setDevices(found);
-      setSession(current => ({ ...current, sdk, target: found.length === 1 ? found[0] : current.target }));
+      setSession(current => ({ ...current, sdk, target: found.length === 1 ? found[0] : null }));
       if (found.length === 0) Alert.alert('No Somnara found', 'Power the device and keep the phone within 1 metre.');
     });
   }
 
   function runDiagnosticScan() {
     return run(async () => {
+      await normalBle.disconnect();
+      if (!await requestBluetoothPermissions()) throw new Error('BLUETOOTH_PERMISSION_REQUIRED');
       const sdk = await getSdkInfo();
       const diagnostic = await scanForOtaDiagnostics();
       const matches = diagnostic.devices.filter(device => device.matchesOtaFilter);
@@ -148,8 +153,15 @@ export function OtaTestPanel({ visible, onClose }: Props) {
         ...current,
         sdk,
         scanDiagnostic: diagnostic,
-        target: matches.length === 1 ? matches[0] : current.target,
+        target: matches.length === 1 ? matches[0] : null,
       }));
+      if (diagnostic.nativeErrorCode || diagnostic.permissionStatus !== 'granted' || diagnostic.bluetoothState !== 'powered_on') {
+        throw new Error(diagnostic.permissionStatus !== 'granted'
+          ? 'BLUETOOTH_PERMISSION_REQUIRED'
+          : diagnostic.bluetoothState !== 'powered_on'
+            ? 'Turn on Bluetooth and try again.'
+            : `Bluetooth scan failed (${diagnostic.nativeErrorCode}). ${diagnostic.nativeErrorMessage ?? 'Please try again.'}`);
+      }
       Alert.alert(
         'Scan diagnostic complete',
         `${diagnostic.filteredCount} AE00 match${diagnostic.filteredCount === 1 ? '' : 'es'} from ${diagnostic.unfilteredCount} nearby BLE device${diagnostic.unfilteredCount === 1 ? '' : 's'}.`,

@@ -6,6 +6,7 @@ import { DeviceActivationScreen } from './src/screens/DeviceActivationScreen';
 import { OnboardingScreen } from './src/screens/OnboardingScreen';
 import { ResetPasswordScreen } from './src/screens/ResetPasswordScreen';
 import { WelcomeScreen } from './src/screens/WelcomeScreen';
+import { BleProvider } from './src/context/BleContext';
 import { SyncProvider } from './src/context/SyncContext';
 import { toAppUser, User } from './src/state/authStore';
 import { ClaimedDevice } from './src/models/Device';
@@ -200,18 +201,20 @@ function AppContent() {
   }
 
   return (
-    <SyncProvider userId={user.id}>
-      {!onboarded ? (
-        <OnboardingScreen onComplete={() => setOnboarded(true)} />
-      ) : (
-        <WelcomeScreen
-          claimedDevice={claimedDevice}
-          onDeviceReset={unlinkDevice}
-          onSignOut={signOut}
-          onDeleteAccount={deleteAccount}
-        />
-      )}
-    </SyncProvider>
+    <BleProvider key={`${user.id}:${claimedDevice.id}`}>
+      <SyncProvider userId={user.id}>
+        {!onboarded ? (
+          <OnboardingScreen onComplete={() => setOnboarded(true)} />
+        ) : (
+          <WelcomeScreen
+            claimedDevice={claimedDevice}
+            onDeviceReset={unlinkDevice}
+            onSignOut={signOut}
+            onDeleteAccount={deleteAccount}
+          />
+        )}
+      </SyncProvider>
+    </BleProvider>
   );
 }
 
