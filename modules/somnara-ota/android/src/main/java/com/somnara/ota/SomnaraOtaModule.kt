@@ -34,7 +34,11 @@ class SomnaraOtaModule : Module() {
 
     AsyncFunction("scanForOtaDevices") { timeoutMs: Double, promise: Promise ->
       requireBluetoothPermissions()
-      controller.scan(timeoutMs.toLong()) { devices ->
+      controller.scan(timeoutMs.toLong()) { devices, errorCode ->
+        if (errorCode != null) {
+          promise.reject("ANDROID_SCAN_$errorCode", "Bluetooth scan failed (Android code $errorCode). Please try again.", null)
+          return@scan
+        }
         promise.resolve(devices.map { device ->
           mapOf(
             "id" to device.id,
@@ -53,6 +57,7 @@ class SomnaraOtaModule : Module() {
       val permissionStatus = if (permissions.all { ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED }) "granted" else "denied"
       val manager = context.getSystemService(android.bluetooth.BluetoothManager::class.java)
       val bluetoothState = when {
+        permissionStatus != "granted" -> "unauthorized"
         manager.adapter == null -> "unavailable"
         manager.adapter.isEnabled -> "powered_on"
         else -> "powered_off"

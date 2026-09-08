@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { colors, typography, spacing, radii } from '../theme';
-import { DeviceStatus, ModeLabels } from '../models/Device';
+import { DeviceStatus } from '../models/Device';
 
 interface Props {
   device: DeviceStatus;
@@ -37,19 +37,19 @@ export function StatusCard({ device, unavailable }: Props) {
     <View style={styles.card}>
       <StatusRow
         label="Somnara"
-        value={device.isConnected ? 'Connected' : 'Searching…'}
+        value={device.isConnected ? 'Connected' : 'Disconnected'}
         active={device.isConnected}
       />
       <View style={styles.divider} />
       <StatusRow
         label="Device"
-        value={device.isOn ? 'On' : 'Off'}
+        value={device.isConnected ? (device.isOn ? 'On' : 'Off') : 'Unknown'}
         active={device.isOn}
       />
       <View style={styles.divider} />
       <StatusRow
-        label="Mode"
-        value={ModeLabels[device.mode]}
+        label="Firmware"
+        value={device.isConnected ? device.firmwareVersion ?? 'Unknown' : 'Unknown'}
       />
     </View>
   );
