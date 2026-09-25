@@ -8,6 +8,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Feather, FontAwesome } from '@expo/vector-icons';
 import * as Crypto from 'expo-crypto';
 import * as Linking from 'expo-linking';
+import * as WebBrowser from 'expo-web-browser';
 import { colors, typography, spacing, radii } from '../theme';
 import { toAppUser, User } from '../state/authStore';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
@@ -21,6 +22,8 @@ import { SomnaraLogo } from '../components/SomnaraLogo';
 const DEV_AUTH_BYPASS = APP_ENV === 'development' && !isSupabaseConfigured;
 
 const AUTH_REDIRECT_URL = Linking.createURL('auth/callback');
+// Separate path so useAuthDeepLink doesn't also try to redeem the OAuth code.
+const OAUTH_REDIRECT_URL = Linking.createURL('auth/oauth');
 
 interface Props {
   onAuth: (user: User) => void;
@@ -108,9 +111,41 @@ export function AuthScreen({ onAuth, sessionExpiredNotice }: Props) {
     }
   }
 
-  function handleGoogle() {
+  async function handleGoogle() {
     setError('');
-    setError('Google sign-in is disabled until its verified Supabase OAuth callback is configured.');
+    setNotice('');
+    if (!supabase) {
+      setError('Authentication service is not configured.');
+      return;
+    }
+    setLoading(true);
+    try {
+      // PKCE flow: Supabase returns the Google consent URL, we open it in an
+      // auth session, and Supabase redirects back to our scheme with a
+      // one-time code that is exchanged for a session using the stored verifier.
+      const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: OAUTH_REDIRECT_URL, skipBrowserRedirect: true },
+      });
+      if (oauthError || !data.url) throw oauthError ?? new Error('Missing OAuth URL');
+
+      const result = await WebBrowser.openAuthSessionAsync(data.url, OAUTH_REDIRECT_URL);
+      if (result.type !== 'success') return; // user cancelled / dismissed
+
+      const { queryParams } = Linking.parse(result.url);
+      const code = typeof queryParams?.code === 'string' ? queryParams.code : null;
+      if (!code) {
+        const description = queryParams?.error_description;
+        throw new Error(typeof description === 'string' ? description : 'Missing authorization code');
+      }
+      const { data: session, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+      if (exchangeError || !session.user) throw exchangeError ?? new Error('Missing authenticated user');
+      onAuth(toAppUser(session.user));
+    } catch {
+      setError('Google Sign In failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function handleEmail() {

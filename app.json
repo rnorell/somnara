@@ -68,7 +68,8 @@
         }
       ],
       "expo-dev-client",
-      "expo-asset"
+      "expo-asset",
+      "expo-web-browser"
     ]
   }
 }

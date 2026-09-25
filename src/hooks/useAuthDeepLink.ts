@@ -17,7 +17,9 @@ export function useAuthDeepLink(): string | null {
 
     async function handleUrl(url: string | null) {
       if (!url) return;
-      const { queryParams } = Linking.parse(url);
+      const { path, queryParams } = Linking.parse(url);
+      // OAuth redirects are redeemed by AuthScreen's auth session instead.
+      if (path === 'auth/oauth') return;
       const linkError = queryParams?.error_description ?? queryParams?.error;
       if (typeof linkError === 'string') {
         setError('This link has expired or was already used. Please request a new one.');
