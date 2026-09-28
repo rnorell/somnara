@@ -40,6 +40,7 @@ export function NextAlarmCard({ onPress }: Props) {
               <View>
                 <Text style={styles.days}>{daysLabel(alarm.days)}</Text>
                 <Text style={styles.sub}>{alarmSubtitle(alarm)}</Text>
+                <Text style={styles.appOnly}>Saved in app · not yet on device</Text>
               </View>
               <Feather name="chevron-right" size={20} color={colors.text.secondary} />
             </View>
@@ -121,6 +122,11 @@ const styles = StyleSheet.create({
     fontSize: typography.sizes.sm,
     color: colors.text.secondary,
     marginTop: 2,
+  },
+  appOnly: {
+    fontSize: typography.sizes.xs,
+    color: colors.accent.dark,
+    marginTop: spacing['1'],
   },
   empty: {
     fontSize: typography.sizes.base,

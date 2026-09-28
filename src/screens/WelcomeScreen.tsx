@@ -10,6 +10,7 @@ import { Button } from '../components/Button';
 import { NextAlarmCard } from '../components/NextAlarmCard';
 import { AlarmsTab } from '../components/AlarmsTab';
 import { SoundsTab } from '../components/SoundsTab';
+import { DeviceReadout } from '../components/DeviceReadout';
 import { SunriseDurationPicker } from '../components/SunriseDurationPicker';
 import { DeviceOwnershipCard } from '../components/DeviceOwnershipCard';
 import { SyncStatusCard } from '../components/SyncStatusCard';
@@ -175,6 +176,8 @@ export function WelcomeScreen({ claimedDevice, onDeviceReset, onSignOut, onDelet
                 device={claimedDevice}
                 onReset={onDeviceReset}
               />
+              <Text style={[styles.settingsSection, { marginTop: spacing['6'] }]}>DEVICE READOUT</Text>
+              <DeviceReadout />
               {isOtaTestEnabled && (
                 <TouchableOpacity style={[styles.helpRow, { marginTop: spacing['3'] }]} onPress={() => setShowOta(true)} activeOpacity={0.8}>
                   <View style={styles.helpIcon}>
