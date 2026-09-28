@@ -12,3 +12,6 @@ export function otaTestEnabled(value = process.env.EXPO_PUBLIC_OTA_TEST_ENABLED)
 }
 
 export const isOtaTestEnabled = otaTestEnabled();
+
+/** Dev-only: skip device claiming + onboarding so the main UI can be previewed without hardware. */
+export const isDemoDevice = __DEV__ && !isProduction && process.env.EXPO_PUBLIC_DEMO_DEVICE === 'true';

@@ -1,57 +1,16 @@
 import { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  interpolateColor,
-} from 'react-native-reanimated';
 import { Feather } from '@expo/vector-icons';
 import * as Crypto from 'expo-crypto';
 import { colors, typography, spacing, radii } from '../theme';
 import { Alarm } from '../models/Alarm';
 import { useSyncContext } from '../context/SyncContext';
 import { SunriseDurationPicker } from './SunriseDurationPicker';
+import { Toggle } from './Toggle';
+import { alarmSubtitle, daysLabel, formatTime } from '../lib/alarmSchedule';
 
 const DAY_LABELS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 const WEEKDAYS = [1, 2, 3, 4, 5];
-
-function formatTime(h: number, m: number) {
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-}
-
-function daysLabel(days: number[]) {
-  if (days.length === 7) return 'Every day';
-  if (JSON.stringify([...days].sort()) === JSON.stringify(WEEKDAYS)) return 'Weekdays';
-  if (JSON.stringify([...days].sort()) === JSON.stringify([0, 6])) return 'Weekends';
-  return days.map(d => DAY_LABELS[d]).join('  ');
-}
-
-function AlarmToggle({ value, onToggle }: { value: boolean; onToggle: () => void }) {
-  const progress = useSharedValue(value ? 1 : 0);
-
-  const TOGGLE_W = 46, TOGGLE_H = 26, THUMB = 20, TRAVEL = 46 - 20 - 8;
-
-  const trackStyle = useAnimatedStyle(() => ({
-    backgroundColor: interpolateColor(progress.value, [0, 1], [colors.border.strong, colors.accent.DEFAULT]),
-  }));
-  const thumbStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: progress.value * TRAVEL }],
-  }));
-
-  const handle = () => {
-    progress.value = withTiming(value ? 0 : 1, { duration: 260 });
-    onToggle();
-  };
-
-  return (
-    <TouchableOpacity onPress={handle} activeOpacity={0.85} hitSlop={10}>
-      <Animated.View style={[styles.track, { width: TOGGLE_W, height: TOGGLE_H, borderRadius: TOGGLE_H / 2 }, trackStyle]}>
-        <Animated.View style={[styles.thumb, { width: THUMB, height: THUMB, borderRadius: THUMB / 2 }, thumbStyle]} />
-      </Animated.View>
-    </TouchableOpacity>
-  );
-}
 
 function AlarmCard({ alarm, onToggle, onDelete, onEdit }: {
   alarm: Alarm;
@@ -61,25 +20,25 @@ function AlarmCard({ alarm, onToggle, onDelete, onEdit }: {
 }) {
   return (
     <TouchableOpacity
-      style={[styles.alarmCard, !alarm.enabled && styles.alarmCardDim]}
+      style={styles.alarmCard}
       onPress={onEdit}
       activeOpacity={0.8}
     >
-      <View style={styles.alarmCardLeft}>
+      <View style={[styles.alarmCardLeft, !alarm.enabled && styles.alarmCardDim]}>
         <Text style={[styles.alarmTime, !alarm.enabled && styles.alarmTimeDim]}>
           {formatTime(alarm.hour, alarm.minute)}
         </Text>
         <Text style={styles.alarmDays}>{daysLabel(alarm.days)}</Text>
-        {alarm.label ? <Text style={styles.alarmLabel}>{alarm.label}</Text> : null}
+        <Text style={styles.alarmLabel}>{alarmSubtitle(alarm)}</Text>
       </View>
       <View style={styles.alarmCardRight}>
-        <AlarmToggle value={alarm.enabled} onToggle={onToggle} />
-        <TouchableOpacity onPress={onEdit} hitSlop={12} style={styles.deleteBtn}>
-          <Feather name="edit-2" size={14} color={colors.text.tertiary} />
-        </TouchableOpacity>
-        <TouchableOpacity onPress={onDelete} hitSlop={12} style={styles.deleteBtn}>
-          <Feather name="trash-2" size={14} color={colors.text.tertiary} />
-        </TouchableOpacity>
+        <Toggle value={alarm.enabled} onToggle={onToggle} label="Alarm enabled" />
+        <View style={styles.cardActions}>
+          <TouchableOpacity onPress={onDelete} hitSlop={12} style={styles.deleteBtn} accessibilityLabel="Delete alarm">
+            <Feather name="trash-2" size={16} color={colors.text.tertiary} />
+          </TouchableOpacity>
+          <Feather name="chevron-right" size={20} color={colors.text.secondary} />
+        </View>
       </View>
     </TouchableOpacity>
   );
@@ -265,18 +224,16 @@ const styles = StyleSheet.create({
   // Alarm card
   alarmCard: {
     backgroundColor: colors.background.elevated,
-    borderRadius: radii.xl,
-    borderWidth: 1,
-    borderColor: colors.border.DEFAULT,
+    borderRadius: radii['2xl'],
     paddingHorizontal: spacing['6'],
     paddingVertical: spacing['5'],
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'stretch',
     shadowColor: '#C49A6C',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
     elevation: 2,
   },
   alarmCardDim: {
@@ -286,8 +243,8 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   alarmTime: {
-    fontSize: typography.sizes['3xl'],
-    fontWeight: typography.weights.light,
+    fontSize: 38,
+    fontWeight: typography.weights.regular,
     color: colors.text.primary,
     letterSpacing: -1,
   },
@@ -295,31 +252,23 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
   },
   alarmDays: {
-    fontSize: typography.sizes.sm,
-    color: colors.text.secondary,
-    fontWeight: typography.weights.regular,
-    letterSpacing: typography.letterSpacing.wide,
+    fontSize: typography.sizes.md,
+    color: colors.accent.DEFAULT,
+    fontWeight: typography.weights.semibold,
   },
   alarmLabel: {
-    fontSize: typography.sizes.xs,
-    color: colors.text.tertiary,
+    fontSize: typography.sizes.base,
+    color: colors.text.secondary,
     marginTop: 2,
   },
   alarmCardRight: {
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+  },
+  cardActions: {
+    flexDirection: 'row',
     alignItems: 'center',
     gap: spacing['3'],
-  },
-  track: {
-    paddingHorizontal: 4,
-    justifyContent: 'center',
-  },
-  thumb: {
-    backgroundColor: '#FFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.15,
-    shadowRadius: 2,
-    elevation: 2,
   },
   deleteBtn: {
     padding: 4,
@@ -457,7 +406,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: spacing['2'],
     backgroundColor: colors.accent.DEFAULT,
-    borderRadius: radii.xl,
+    borderRadius: radii.full,
     paddingVertical: spacing['5'],
   },
   addBtnText: {

@@ -4,6 +4,7 @@ import {
   StyleSheet, Alert, Modal, ActivityIndicator,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { confirmAction, showMessage } from '../lib/dialog';
 import { colors, typography, spacing, radii } from '../theme';
 import { ClaimedDevice } from '../models/Device';
 
@@ -39,23 +40,17 @@ export function DeviceOwnershipCard({ device, onReset }: Props) {
     setTransferError('Secure ownership transfer invitations are not configured yet. No changes were made.');
   }
 
-  function handleReset() {
-    Alert.alert(
-      'Unlink Device',
-      `This will remove "${device.name}" from your account. It does not factory-reset the physical device.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Unlink Device',
-          style: 'destructive',
-          onPress: () => {
-            void onReset().catch(() => {
-              Alert.alert('Unable to unlink', 'The secure device service rejected the request. No changes were made.');
-            });
-          },
-        },
-      ],
-    );
+  async function handleReset() {
+    const confirmed = await confirmAction({
+      title: 'Unlink Device',
+      message: `This will remove "${device.name}" from your account. It does not factory-reset the physical device.`,
+      confirmLabel: 'Unlink Device',
+      destructive: true,
+    });
+    if (!confirmed) return;
+    await onReset().catch(() => {
+      showMessage('Unable to unlink', 'The secure device service rejected the request. No changes were made.');
+    });
   }
 
   return (
@@ -119,7 +114,7 @@ export function DeviceOwnershipCard({ device, onReset }: Props) {
 
         <TouchableOpacity
           style={styles.actionRow}
-          onPress={handleReset}
+          onPress={() => { void handleReset(); }}
           activeOpacity={0.7}
         >
           <View style={styles.actionLeft}>

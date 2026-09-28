@@ -31,3 +31,61 @@ export function createSkipNextAlarmFrame(input: SkipNextAlarmFrameInput): Uint8A
   frame[6] = sum8(frame.slice(0, 6));
   return frame;
 }
+
+// Audio Control 0x09 and Set Volume 0x08 — Commands tab of the manufacturer
+// protocol workbook, accepted by reference in the 2026-09-01 v1.0 reply.
+// The device answers with ACK 0x7F, then a 0x13 status report.
+export const SET_VOLUME_OPCODE = 0x08;
+export const SET_VOLUME_FRAME_LENGTH = 6;
+export const AUDIO_CONTROL_OPCODE = 0x09;
+export const AUDIO_CONTROL_FRAME_LENGTH = 8;
+
+export const AUDIO_ACTIONS = { stop: 0, preview: 1 } as const;
+export type AudioAction = keyof typeof AUDIO_ACTIONS;
+
+export interface AudioControlFrameInput {
+  readonly sequence: number;
+  readonly action: AudioAction;
+  readonly soundId: number;
+  readonly volumePercent: number;
+}
+
+export function createAudioControlFrame(input: AudioControlFrameInput): Uint8Array {
+  assertIntegerInRange(input.sequence, 0, 0xFE, 'Sequence');
+  assertIntegerInRange(input.soundId, 0, 25, 'Sound ID');
+  assertIntegerInRange(input.volumePercent, 0, 100, 'Volume');
+
+  const frame = new Uint8Array([
+    ACK_FRAME_HEADER,
+    AUDIO_CONTROL_FRAME_LENGTH,
+    input.sequence,
+    AUDIO_CONTROL_OPCODE,
+    AUDIO_ACTIONS[input.action],
+    input.soundId,
+    input.volumePercent,
+    0,
+  ]);
+  frame[7] = sum8(frame.slice(0, 7));
+  return frame;
+}
+
+export interface SetVolumeFrameInput {
+  readonly sequence: number;
+  readonly volumePercent: number;
+}
+
+export function createSetVolumeFrame(input: SetVolumeFrameInput): Uint8Array {
+  assertIntegerInRange(input.sequence, 0, 0xFE, 'Sequence');
+  assertIntegerInRange(input.volumePercent, 0, 100, 'Volume');
+
+  const frame = new Uint8Array([
+    ACK_FRAME_HEADER,
+    SET_VOLUME_FRAME_LENGTH,
+    input.sequence,
+    SET_VOLUME_OPCODE,
+    input.volumePercent,
+    0,
+  ]);
+  frame[5] = sum8(frame.slice(0, 5));
+  return frame;
+}

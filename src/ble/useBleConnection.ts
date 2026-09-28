@@ -2,13 +2,29 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { createBleTransport } from './createBleTransport';
 import { BleConnectionState, BleTransport, BleTransportError } from './types';
 import { AckTransactionController } from './AckTransactionController';
-import { BleProtocolError } from './AckFrame';
+import { ACK_RESULT_CODES, AckResult, BleProtocolError } from './AckFrame';
+import {
+  AUDIO_CONTROL_OPCODE,
+  createAudioControlFrame,
+  createSetVolumeFrame,
+  SET_VOLUME_OPCODE,
+} from './DownlinkFrame';
 import { AlarmListReport, DeviceStatusReport, dispatchUplinkNotification, MINIMUM_ALARM_LIST_MTU } from './UplinkFrame';
 import { DeviceStatus } from '../models/Device';
 import { applyBleStatusReport, initialDeviceStatus } from '../state/deviceStore';
 
 export function stateAfterConnection(kind: BleTransport['kind'], allowMockReady: boolean): BleConnectionState {
   return kind === 'mock' && allowMockReady ? 'ready' : 'connected_unverified';
+}
+
+export function ackFailureMessage(result: AckResult): string {
+  switch (result.resultCode) {
+    case ACK_RESULT_CODES.AUDIO_NOT_FOUND: return 'That sound is not installed on this Somnara.';
+    case ACK_RESULT_CODES.NOT_BONDED: return 'Somnara is not paired with this phone. Reconnect and accept the pairing prompt.';
+    case ACK_RESULT_CODES.BUSY: return 'Somnara is busy. Try again in a moment.';
+    case ACK_RESULT_CODES.INVALID_VALUE: return 'Somnara rejected that value.';
+    default: return `Somnara could not complete the command (${result.resultName}).`;
+  }
 }
 
 export function useBleConnection(transportFactory: () => BleTransport = createBleTransport) {
@@ -26,6 +42,10 @@ export function useBleConnection(transportFactory: () => BleTransport = createBl
   const [latestAlarmList, setLatestAlarmList] = useState<AlarmListReport | null>(null);
   const [deviceStatus, setDeviceStatus] = useState<DeviceStatus>(initialDeviceStatus);
   const controllerRef = useRef<AckTransactionController | null>(null);
+  // What the app last successfully asked the device to play. Status 0x13 reports
+  // the selected sound ID but has no explicit playing/stopped field.
+  const [playingSoundId, setPlayingSoundId] = useState<number | null>(null);
+  const [commandPending, setCommandPending] = useState(false);
 
   const clearStatusTimer = useCallback(() => {
     if (statusTimerRef.current) clearTimeout(statusTimerRef.current);
@@ -44,6 +64,7 @@ export function useBleConnection(transportFactory: () => BleTransport = createBl
     clearSession();
     if (activeRef.current) {
       setState('disconnected');
+      setPlayingSoundId(null);
       setDeviceStatus(initialDeviceStatus);
       setLatestStatus(null);
       setLatestAlarmList(null);
@@ -65,6 +86,7 @@ export function useBleConnection(transportFactory: () => BleTransport = createBl
     setLatestStatus(null);
     setLatestAlarmList(null);
     setDeviceStatus(initialDeviceStatus);
+    setPlayingSoundId(null);
     setState('scanning');
     const fail = (failure: unknown) => {
       if (!current()) return;
@@ -132,6 +154,40 @@ export function useBleConnection(transportFactory: () => BleTransport = createBl
     }
   }, [clearSession, clearStatusTimer]);
 
+  const runCommand = useCallback(async (opcode: number, makeFrame: (sequence: number) => Uint8Array) => {
+    const controller = controllerRef.current;
+    if (!controller) throw new Error('Connect to Somnara first.');
+    setCommandPending(true);
+    try {
+      const result = await controller.execute(opcode, makeFrame);
+      if (!result.ok) throw new Error(ackFailureMessage(result));
+      return result;
+    } catch (failure) {
+      if (failure instanceof BleProtocolError && failure.code === 'command_timeout') {
+        throw new Error('Somnara did not respond. Check it is powered and nearby.');
+      }
+      throw failure;
+    } finally {
+      if (activeRef.current) setCommandPending(false);
+    }
+  }, []);
+
+  const playSound = useCallback(async (soundId: number, volumePercent: number) => {
+    await runCommand(AUDIO_CONTROL_OPCODE, sequence =>
+      createAudioControlFrame({ sequence, action: 'preview', soundId, volumePercent }));
+    if (activeRef.current) setPlayingSoundId(soundId === 0 ? null : soundId);
+  }, [runCommand]);
+
+  const stopSound = useCallback(async () => {
+    await runCommand(AUDIO_CONTROL_OPCODE, sequence =>
+      createAudioControlFrame({ sequence, action: 'stop', soundId: 0, volumePercent: 0 }));
+    if (activeRef.current) setPlayingSoundId(null);
+  }, [runCommand]);
+
+  const setVolume = useCallback(async (volumePercent: number) => {
+    await runCommand(SET_VOLUME_OPCODE, sequence => createSetVolumeFrame({ sequence, volumePercent }));
+  }, [runCommand]);
+
   useEffect(() => {
     activeRef.current = true;
     const transport = transportFactoryRef.current();
@@ -145,5 +201,8 @@ export function useBleConnection(transportFactory: () => BleTransport = createBl
     };
   }, [clearSession]);
 
-  return { state, error, protocolError, latestStatus, latestAlarmList, deviceStatus, connect, disconnect };
+  return {
+    state, error, protocolError, latestStatus, latestAlarmList, deviceStatus, connect, disconnect,
+    playingSoundId, commandPending, playSound, stopSound, setVolume,
+  };
 }

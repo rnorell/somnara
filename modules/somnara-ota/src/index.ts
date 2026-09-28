@@ -1,4 +1,4 @@
-import { NativeModule, requireNativeModule } from 'expo-modules-core';
+import { NativeModule, requireOptionalNativeModule } from 'expo-modules-core';
 
 export type OtaPhase =
   | 'connecting'
@@ -78,12 +78,21 @@ declare class SomnaraOtaNativeModule extends NativeModule<SomnaraOtaEvents> {
   cancelUpdate(): Promise<boolean>;
 }
 
-const nativeModule = requireNativeModule<SomnaraOtaNativeModule>('SomnaraOta');
+// Optional so that importing this package doesn't crash where the native
+// module isn't linked (web preview, Expo Go). Calls still fail loudly there.
+const optionalModule = requireOptionalNativeModule<SomnaraOtaNativeModule>('SomnaraOta');
 
-export const getSdkInfo = () => nativeModule.getSdkInfo();
-export const scanForOtaDevices = (timeoutMs = 8_000) => nativeModule.scanForOtaDevices(timeoutMs);
-export const scanForOtaDiagnostics = (timeoutMs = 8_000) => nativeModule.scanForOtaDiagnostics(timeoutMs);
-export const inspectFirmware = (uri: string) => nativeModule.inspectFirmware(uri);
-export const startUpdate = (options: { deviceId: string; firmwareUri: string; expectedSha256: string }) => nativeModule.startUpdate(options);
-export const cancelUpdate = () => nativeModule.cancelUpdate();
-export const addOtaListener = (listener: (event: OtaEvent) => void) => nativeModule.addListener('onOtaEvent', listener);
+function nativeModule(): SomnaraOtaNativeModule {
+  if (!optionalModule) throw new Error('Somnara OTA is only available in the native iOS/Android build.');
+  return optionalModule;
+}
+
+export const isOtaAvailable = optionalModule != null;
+export const getSdkInfo = () => nativeModule().getSdkInfo();
+export const scanForOtaDevices = (timeoutMs = 8_000) => nativeModule().scanForOtaDevices(timeoutMs);
+export const scanForOtaDiagnostics = (timeoutMs = 8_000) => nativeModule().scanForOtaDiagnostics(timeoutMs);
+export const inspectFirmware = (uri: string) => nativeModule().inspectFirmware(uri);
+export const startUpdate = (options: { deviceId: string; firmwareUri: string; expectedSha256: string }) => nativeModule().startUpdate(options);
+export const cancelUpdate = () => nativeModule().cancelUpdate();
+export const addOtaListener = (listener: (event: OtaEvent) => void) =>
+  optionalModule ? optionalModule.addListener('onOtaEvent', listener) : { remove() {} };
