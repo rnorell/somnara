@@ -130,6 +130,13 @@ export function AlarmsTab() {
 
   return (
     <View style={styles.container}>
+      <View style={styles.notice}>
+        <Feather name="info" size={14} color={colors.accent.dark} />
+        <Text style={styles.noticeText}>
+          Alarms are saved in the app but not yet sent to your Somnara, so the light won't wake you with them yet.
+        </Text>
+      </View>
+
       {/* Alarm list */}
       {alarms.map(alarm => (
         <AlarmCard
@@ -279,6 +286,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: spacing['12'],
     gap: spacing['3'],
+  },
+  notice: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing['2'],
+    backgroundColor: colors.background.card,
+    borderRadius: radii.md,
+    padding: spacing['3'],
+  },
+  noticeText: {
+    flex: 1,
+    fontSize: typography.sizes.xs,
+    color: colors.accent.dark,
+    lineHeight: 17,
   },
   emptyText: {
     fontSize: typography.sizes.base,

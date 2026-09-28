@@ -22,6 +22,9 @@ jest.mock('../context/BleContext', () => ({
     deviceStatus: { isConnected: false, isOn: false, clockValidity: 'valid', firmwareVersion: null },
     state: 'disconnected',
     error: null,
+    protocolError: null,
+    latestStatus: null,
+    latestAlarmList: null,
     connect: mockConnect,
     disconnect: mockDisconnect,
     playingSoundId: null,
@@ -109,4 +112,11 @@ test('Settings: unlink device asks for confirmation', async () => {
   await fireEvent.press(screen.getByText('Settings'));
   await fireEvent.press(screen.getByText(/Unlink/));
   expect(mockConfirm).toHaveBeenCalledWith(expect.objectContaining({ title: 'Unlink Device' }));
+});
+
+test('Settings shows the device readout', async () => {
+  await renderScreen();
+  await fireEvent.press(screen.getByText('Settings'));
+  expect(screen.getByText('DEVICE READOUT')).toBeTruthy();
+  expect(screen.getByText('None received yet')).toBeTruthy();
 });
