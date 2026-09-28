@@ -2,14 +2,14 @@ import { View, Image, Dimensions } from 'react-native';
 import { colors, radii, spacing } from '../theme';
 
 const ASPECT_RATIO = 4179 / 988;
-const WIDTH = Math.min(Dimensions.get('window').width * 0.64, 260);
-const HEIGHT = WIDTH / ASPECT_RATIO;
+const DEFAULT_WIDTH = Math.min(Dimensions.get('window').width * 0.64, 260);
 
 interface Props {
   style?: object;
+  width?: number;
 }
 
-export function SomnaraLogo({ style }: Props) {
+export function SomnaraLogo({ style, width = DEFAULT_WIDTH }: Props) {
   return (
     <View
       style={[
@@ -26,7 +26,7 @@ export function SomnaraLogo({ style }: Props) {
     >
       <Image
         source={require('../../assets/logo.png')}
-        style={{ width: WIDTH, height: HEIGHT }}
+        style={{ width, height: width / ASPECT_RATIO }}
         resizeMode="contain"
         tintColor={colors.accent.DEFAULT}
       />

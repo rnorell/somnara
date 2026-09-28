@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, SafeAreaView, TouchableOpacity, Modal, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
 import { colors, typography, spacing, radii } from '../theme';
 import { DeviceIllustration } from '../components/DeviceIllustration';
-import { StatusCard } from '../components/StatusCard';
+import { ConnectionCard } from '../components/ConnectionCard';
 import { Button } from '../components/Button';
 import { NextAlarmCard } from '../components/NextAlarmCard';
 import { AlarmsTab } from '../components/AlarmsTab';
@@ -20,6 +20,7 @@ import { ClaimedDevice } from '../models/Device';
 import { SomnaraLogo } from '../components/SomnaraLogo';
 import { isOtaTestEnabled } from '../lib/env';
 import { OtaTestPanel } from '../components/OtaTestPanel';
+import { formatCountdown, nextAlarm } from '../lib/alarmSchedule';
 
 type Tab = 'Home' | 'Alarms' | 'Sounds' | 'Settings';
 
@@ -30,20 +31,19 @@ const TABS: { id: Tab; icon: React.ComponentProps<typeof Feather>['name'] }[] = 
   { id: 'Settings', icon: 'sliders' },
 ];
 
-import React from 'react';
-
 interface WelcomeScreenProps {
   claimedDevice: ClaimedDevice;
   onDeviceReset: () => Promise<void>;
   onSignOut: () => void;
   onDeleteAccount: () => Promise<void>;
+  userName?: string;
 }
 
-export function WelcomeScreen({ claimedDevice, onDeviceReset, onSignOut, onDeleteAccount }: WelcomeScreenProps) {
+export function WelcomeScreen({ claimedDevice, onDeviceReset, onSignOut, onDeleteAccount, userName }: WelcomeScreenProps) {
   const greeting = useGreeting();
   const { deviceStatus: device, state, error, connect, disconnect } = useSharedBleConnection();
   const busy = state === 'scanning' || state === 'connecting' || state === 'connected_unverified';
-  const { preferences, setPreferences } = useSyncContext();
+  const { preferences, setPreferences, alarms } = useSyncContext();
   const [activeTab, setActiveTab] = useState<Tab>('Home');
   const [showHelp, setShowHelp] = useState(false);
   const [showOta, setShowOta] = useState(false);
@@ -67,77 +67,95 @@ export function WelcomeScreen({ claimedDevice, onDeviceReset, onSignOut, onDelet
     );
   }
 
+  const statusText = state === 'ready' ? 'Connected'
+    : state === 'scanning' ? 'Looking for Somnara…'
+    : state === 'connecting' ? 'Connecting…'
+    : state === 'connected_unverified' ? 'Waiting for device status…'
+    : 'Disconnected';
+  const onConnectionPress = () => { void (busy || device.isConnected ? disconnect() : connect()); };
+  const firstName = userName?.trim().split(/\s+/)[0];
+  const upcoming = nextAlarm(alarms);
+  const comingSoon = (feature: string) => Alert.alert(feature, 'This control is coming soon to the Somnara app.');
+
   return (
-    <LinearGradient
-      colors={['#FDF8F0', '#FAF3E6', '#F5EBD8']}
-      style={styles.gradient}
-    >
+    <LinearGradient colors={['#FDF8F0', '#FAF3E6', '#F5EBD8']} style={styles.gradient}>
       <SafeAreaView style={styles.safe}>
-        <ScrollView
-          contentContainerStyle={styles.scroll}
-          showsVerticalScrollIndicator={false}
-        >
+        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           <View style={styles.header}>
-            <SomnaraLogo />
+            <SomnaraLogo width={190} style={styles.logo} />
+            <TouchableOpacity
+              style={styles.profileBtn}
+              onPress={() => setActiveTab('Settings')}
+              activeOpacity={0.8}
+              accessibilityLabel="Account and settings"
+            >
+              <Feather name="user" size={22} color={colors.accent.DEFAULT} />
+            </TouchableOpacity>
           </View>
 
-          <View style={styles.illustration}>
-            <DeviceIllustration isOn={device.isConnected && device.isOn} />
-          </View>
-
-          <Text style={styles.greeting}>{greeting}</Text>
-
-          {/* Tab bar */}
-          <View style={styles.tabBar}>
-            {TABS.map(tab => {
-              const active = activeTab === tab.id;
-              return (
-                <TouchableOpacity
-                  key={tab.id}
-                  style={styles.tabItem}
-                  onPress={() => setActiveTab(tab.id)}
-                  activeOpacity={0.7}
-                >
-                  <Feather
-                    name={tab.icon}
-                    size={16}
-                    color={active ? colors.accent.DEFAULT : colors.text.tertiary}
-                  />
-                  <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>
-                    {tab.id}
-                  </Text>
-                  {active && <View style={styles.tabIndicator} />}
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          {/* Tab content */}
           {activeTab === 'Home' && (
             <View style={styles.content}>
-              {device.clockValidity === 'invalid' && <ClockReliabilityWarning />}
-              <StatusCard device={device} />
-              <NextAlarmCard />
-
-              <View style={styles.buttons}>
-                <Text accessibilityLiveRegion="polite" style={styles.comingSoonText}>
-                  {error ?? (state === 'ready' ? 'Connected to Somnara'
-                    : state === 'scanning' ? 'Looking for Somnara…'
-                    : state === 'connecting' ? 'Connecting…'
-                    : state === 'connected_unverified' ? 'Waiting for device status…'
-                    : 'Somnara is disconnected')}
-                </Text>
-                <Button
-                  label={busy ? 'Cancel connection' : device.isConnected ? 'Disconnect' : 'Connect Device'}
-                  onPress={() => { void (busy || device.isConnected ? disconnect() : connect()); }}
-                  variant="primary"
-                />
-                <Text style={styles.comingSoonText}>Device status is live. Power controls and alarm transfer are not available yet.</Text>
+              <View style={styles.hero}>
+                <View style={styles.heroText}>
+                  <Text style={styles.heroGreeting}>{greeting.replace(/!$/, ',')}</Text>
+                  {firstName ? <Text style={styles.heroName} numberOfLines={1}>{firstName}</Text> : null}
+                  <Text style={styles.heroTagline}>A brighter day starts here.</Text>
+                </View>
+                <View style={styles.heroDevice}>
+                  <DeviceIllustration isOn={device.isConnected && device.isOn} size={190} />
+                </View>
               </View>
+
+              {device.clockValidity === 'invalid' && <ClockReliabilityWarning />}
+
+              <ConnectionCard
+                deviceName={device.isConnected && device.firmwareVersion
+                  ? `${claimedDevice.name} · v${device.firmwareVersion}`
+                  : claimedDevice.name}
+                isConnected={device.isConnected}
+                busy={busy}
+                statusText={statusText}
+                error={error}
+                onPress={onConnectionPress}
+              />
+
+              <NextAlarmCard onPress={() => setActiveTab('Alarms')} />
+
+              <View style={styles.grid}>
+                <QuickTile icon="sunrise" title="Light" sub="Adjust brightness" onPress={() => comingSoon('Light')} />
+                <QuickTile icon="music" title="Sounds" sub="Choose ambient" onPress={() => setActiveTab('Sounds')} />
+                <QuickTile icon="moon" title="Sleep Mode" sub="Wind down" onPress={() => comingSoon('Sleep Mode')} />
+                <QuickTile icon="bar-chart-2" title="Routines" sub="Build habits" onPress={() => comingSoon('Routines')} />
+              </View>
+
+              <View style={styles.promo}>
+                <Feather name="sun" size={34} color={colors.accent.DEFAULT} />
+                <View style={styles.promoText}>
+                  <Text style={styles.promoTitle}>Better mornings start tonight.</Text>
+                  <Text style={styles.promoSub}>Set your sleep routine</Text>
+                </View>
+                <TouchableOpacity style={styles.promoBtn} onPress={() => setActiveTab('Alarms')} activeOpacity={0.8}>
+                  <Text style={styles.promoBtnText}>Get Started</Text>
+                  <Feather name="chevron-right" size={16} color={colors.text.inverse} />
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.footnote}>Device status is live. Power controls and alarm transfer are not available yet.</Text>
             </View>
           )}
 
-          {activeTab === 'Alarms' && <AlarmsTab />}
+          {activeTab === 'Alarms' && (
+            <View>
+              <View style={styles.alarmsHero}>
+                <DeviceIllustration isOn={device.isConnected && device.isOn} size={300} />
+                <Text style={styles.greeting}>{greeting}</Text>
+                <Text style={styles.nextIn}>
+                  {upcoming ? `Next alarm in ${formatCountdown(upcoming.minutes)}` : 'No alarms scheduled'}
+                </Text>
+              </View>
+              <AlarmsTab />
+            </View>
+          )}
 
           {activeTab === 'Sounds' && (
             <View style={styles.placeholder}>
@@ -206,6 +224,27 @@ export function WelcomeScreen({ claimedDevice, onDeviceReset, onSignOut, onDelet
             </View>
           )}
         </ScrollView>
+
+        {/* Bottom tab bar */}
+        <View style={styles.tabBar}>
+          {TABS.map(tab => {
+            const active = activeTab === tab.id;
+            return (
+              <TouchableOpacity
+                key={tab.id}
+                style={styles.tabItem}
+                onPress={() => setActiveTab(tab.id)}
+                activeOpacity={0.7}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: active }}
+              >
+                <Feather name={tab.icon} size={24} color={active ? colors.accent.DEFAULT : colors.text.secondary} />
+                <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>{tab.id}</Text>
+                <View style={[styles.tabDot, active && styles.tabDotActive]} />
+              </TouchableOpacity>
+            );
+          })}
+        </View>
       </SafeAreaView>
 
       <Modal visible={showHelp} animationType="slide" presentationStyle="pageSheet">
@@ -216,6 +255,34 @@ export function WelcomeScreen({ claimedDevice, onDeviceReset, onSignOut, onDelet
   );
 }
 
+function QuickTile({ icon, title, sub, onPress }: {
+  icon: React.ComponentProps<typeof Feather>['name'];
+  title: string;
+  sub: string;
+  onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity style={styles.tile} onPress={onPress} activeOpacity={0.85}>
+      <View style={styles.tileIcon}>
+        <Feather name={icon} size={22} color={colors.accent.DEFAULT} />
+      </View>
+      <View style={styles.tileText}>
+        <Text style={styles.tileTitle} numberOfLines={1}>{title}</Text>
+        <Text style={styles.tileSub} numberOfLines={1}>{sub}</Text>
+      </View>
+      <Feather name="chevron-right" size={16} color={colors.text.secondary} />
+    </TouchableOpacity>
+  );
+}
+
+const cardShadow = {
+  shadowColor: '#C49A6C',
+  shadowOffset: { width: 0, height: 4 },
+  shadowOpacity: 0.08,
+  shadowRadius: 14,
+  elevation: 2,
+};
+
 const styles = StyleSheet.create({
   gradient: {
     flex: 1,
@@ -225,88 +292,191 @@ const styles = StyleSheet.create({
   },
   scroll: {
     flexGrow: 1,
-    paddingBottom: spacing['12'],
+    paddingBottom: spacing['8'],
   },
   header: {
-    paddingTop: spacing['6'],
-    paddingBottom: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing['6'],
+    paddingTop: spacing['4'],
+    paddingBottom: spacing['2'],
+  },
+  logo: {
+    backgroundColor: 'transparent',
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+  },
+  profileBtn: {
+    width: 48, height: 48, borderRadius: 24,
+    backgroundColor: colors.background.card,
+    alignItems: 'center', justifyContent: 'center',
+  },
+
+  // Home
+  content: {
+    gap: spacing['4'],
+    paddingHorizontal: spacing['5'],
+  },
+  hero: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 170,
+  },
+  heroText: {
+    flex: 1,
+    paddingLeft: spacing['1'],
+    zIndex: 1,
+  },
+  heroGreeting: {
+    fontSize: typography.sizes['2xl'],
+    fontWeight: typography.weights.regular,
+    color: colors.accent.DEFAULT,
+    letterSpacing: typography.letterSpacing.tight,
+  },
+  heroName: {
+    fontSize: typography.sizes['3xl'],
+    fontWeight: typography.weights.bold,
+    color: colors.accent.DEFAULT,
+    letterSpacing: typography.letterSpacing.tight,
+  },
+  heroTagline: {
+    fontSize: typography.sizes.md,
+    color: colors.text.secondary,
+    marginTop: spacing['3'],
+    lineHeight: 24,
+  },
+  heroDevice: {
+    marginRight: -spacing['5'],
+  },
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    rowGap: spacing['4'],
+  },
+  tile: {
+    width: '48%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing['3'],
+    backgroundColor: colors.background.elevated,
+    borderRadius: radii.xl,
+    paddingHorizontal: spacing['3'],
+    paddingVertical: spacing['4'],
+    ...cardShadow,
+  },
+  tileIcon: {
+    width: 46, height: 46, borderRadius: 23,
+    backgroundColor: colors.background.card,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  tileText: { flex: 1 },
+  tileTitle: {
+    fontSize: typography.sizes.base,
+    fontWeight: typography.weights.medium,
+    color: colors.text.primary,
+  },
+  tileSub: {
+    fontSize: typography.sizes.xs,
+    color: colors.text.secondary,
+    marginTop: 2,
+  },
+  promo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing['4'],
+    backgroundColor: colors.background.elevated,
+    borderRadius: radii.xl,
+    padding: spacing['5'],
+    ...cardShadow,
+  },
+  promoText: { flex: 1 },
+  promoTitle: {
+    fontSize: typography.sizes.md,
+    fontWeight: typography.weights.medium,
+    color: colors.text.primary,
+  },
+  promoSub: {
+    fontSize: typography.sizes.sm,
+    color: colors.text.secondary,
+    marginTop: 4,
+  },
+  promoBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    backgroundColor: colors.accent.DEFAULT,
+    borderRadius: radii.full,
+    paddingHorizontal: spacing['4'],
+    paddingVertical: spacing['3'],
+  },
+  promoBtnText: {
+    fontSize: typography.sizes.sm,
+    fontWeight: typography.weights.semibold,
+    color: colors.text.inverse,
+  },
+  footnote: {
+    fontSize: typography.sizes.xs,
+    color: colors.text.tertiary,
+    textAlign: 'center',
+  },
+
+  // Alarms
+  alarmsHero: {
     alignItems: 'center',
   },
   greeting: {
     fontSize: typography.sizes['3xl'],
-    fontWeight: typography.weights.light,
+    fontWeight: typography.weights.regular,
     color: colors.accent.DEFAULT,
     letterSpacing: typography.letterSpacing.tight,
     textAlign: 'center',
-    marginBottom: spacing['5'],
+    marginTop: spacing['2'],
   },
-  illustration: {
-    alignItems: 'center',
-    paddingTop: 0,
-    paddingBottom: 0,
+  nextIn: {
+    fontSize: typography.sizes.md,
+    color: colors.text.secondary,
+    marginTop: spacing['2'],
   },
+
+  // Bottom tab bar
   tabBar: {
     flexDirection: 'row',
     backgroundColor: colors.background.elevated,
-    marginHorizontal: spacing['6'],
-    borderRadius: radii.xl,
-    borderWidth: 1,
-    borderColor: colors.border.DEFAULT,
-    marginBottom: spacing['5'],
+    borderTopLeftRadius: radii.xl,
+    borderTopRightRadius: radii.xl,
+    paddingTop: spacing['3'],
+    paddingBottom: spacing['2'],
     shadowColor: '#C49A6C',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 8,
   },
   tabItem: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: spacing['4'],
-    gap: spacing['1'],
-    position: 'relative',
+    gap: 4,
   },
   tabLabel: {
-    fontSize: typography.sizes.xs,
+    fontSize: typography.sizes.sm,
     fontWeight: typography.weights.medium,
-    color: colors.text.tertiary,
-    letterSpacing: typography.letterSpacing.wide,
+    color: colors.text.secondary,
   },
   tabLabelActive: {
     color: colors.accent.DEFAULT,
     fontWeight: typography.weights.semibold,
   },
-  tabIndicator: {
-    position: 'absolute',
-    bottom: 0,
-    width: 20,
-    height: 2,
-    borderRadius: 1,
+  tabDot: {
+    width: 5, height: 5, borderRadius: 2.5,
+    backgroundColor: 'transparent',
+  },
+  tabDotActive: {
     backgroundColor: colors.accent.DEFAULT,
   },
-  content: {
-    gap: spacing['5'],
-    paddingHorizontal: spacing['6'],
-  },
-  buttons: {
-    gap: spacing['3'],
-    marginTop: spacing['2'],
-  },
-  secondaryBtn: {
-    marginTop: spacing['1'],
-  },
-  comingSoonRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing['2'],
-    marginTop: spacing['2'],
-    paddingVertical: spacing['4'],
-  },
-  comingSoonText: {
-    fontSize: typography.sizes.sm,
-    color: colors.text.tertiary,
-  },
+
+  // Sounds / Settings
   settingsContent: {
     paddingHorizontal: spacing['6'],
     paddingTop: spacing['4'],

@@ -11,9 +11,12 @@ import { colors } from '../theme';
 
 interface Props {
   isOn: boolean;
+  /** Rendered width; everything scales from the original 360pt design. */
+  size?: number;
 }
 
-export function DeviceIllustration({ isOn }: Props) {
+export function DeviceIllustration({ isOn, size = 360 }: Props) {
+  const k = size / 360;
   const glowOpacity = useSharedValue(0.2);
   const glowScale = useSharedValue(0.95);
 
@@ -46,12 +49,12 @@ export function DeviceIllustration({ isOn }: Props) {
   }));
 
   return (
-    <View style={styles.container}>
-      <Animated.View style={[styles.outerGlow, outerGlowStyle]} />
-      <Animated.View style={[styles.innerGlow, innerGlowStyle]} />
+    <View style={[styles.container, { width: 360 * k, height: 288 * k }]}>
+      <Animated.View style={[styles.outerGlow, { width: 336 * k, height: 240 * k, borderRadius: 168 * k }, outerGlowStyle]} />
+      <Animated.View style={[styles.innerGlow, { width: 240 * k, height: 168 * k, borderRadius: 120 * k }, innerGlowStyle]} />
       <Image
         source={require('../../assets/device.png')}
-        style={styles.image}
+        style={{ width: 360 * k, height: 264 * k }}
         resizeMode="contain"
       />
     </View>

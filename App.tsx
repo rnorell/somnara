@@ -208,6 +208,7 @@ function AppContent() {
         ) : (
           <WelcomeScreen
             claimedDevice={claimedDevice}
+            userName={user.name}
             onDeviceReset={unlinkDevice}
             onSignOut={signOut}
             onDeleteAccount={deleteAccount}
