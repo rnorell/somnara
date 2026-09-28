@@ -4,7 +4,7 @@ export function createBleTransport(): BleTransport {
   const useMock = __DEV__ && process.env.EXPO_PUBLIC_BLE_DRIVER === 'mock';
   if (useMock) {
     const { MockBleTransport } = require('./MockBleTransport') as typeof import('./MockBleTransport');
-    return new MockBleTransport();
+    return new MockBleTransport({ simulateDevice: true });
   }
   const { NativeBleTransport } = require('./NativeBleTransport') as typeof import('./NativeBleTransport');
   return new NativeBleTransport();

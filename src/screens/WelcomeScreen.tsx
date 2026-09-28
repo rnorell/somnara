@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, SafeAreaView, TouchableOpacity, Modal, Alert } from 'react-native';
+import React, { useRef, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, SafeAreaView, TouchableOpacity, Modal } from 'react-native';
+import { confirmAction, showMessage } from '../lib/dialog';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
 import { colors, typography, spacing, radii } from '../theme';
@@ -8,6 +9,7 @@ import { ConnectionCard } from '../components/ConnectionCard';
 import { Button } from '../components/Button';
 import { NextAlarmCard } from '../components/NextAlarmCard';
 import { AlarmsTab } from '../components/AlarmsTab';
+import { SoundsTab } from '../components/SoundsTab';
 import { SunriseDurationPicker } from '../components/SunriseDurationPicker';
 import { DeviceOwnershipCard } from '../components/DeviceOwnershipCard';
 import { SyncStatusCard } from '../components/SyncStatusCard';
@@ -44,27 +46,26 @@ export function WelcomeScreen({ claimedDevice, onDeviceReset, onSignOut, onDelet
   const { deviceStatus: device, state, error, connect, disconnect } = useSharedBleConnection();
   const busy = state === 'scanning' || state === 'connecting' || state === 'connected_unverified';
   const { preferences, setPreferences, alarms } = useSyncContext();
-  const [activeTab, setActiveTab] = useState<Tab>('Home');
+  const [activeTab, setActiveTabState] = useState<Tab>('Home');
+  const scrollRef = useRef<ScrollView>(null);
+  const setActiveTab = (tab: Tab) => {
+    setActiveTabState(tab);
+    scrollRef.current?.scrollTo({ y: 0, animated: false });
+  };
   const [showHelp, setShowHelp] = useState(false);
   const [showOta, setShowOta] = useState(false);
 
-  function handleDeleteAccount() {
-    Alert.alert(
-      'Delete Account',
-      'This permanently deletes your account, claimed device, alarms, and preferences. This cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete Account',
-          style: 'destructive',
-          onPress: () => {
-            void onDeleteAccount().catch(() => {
-              Alert.alert('Unable to delete account', 'Please try again.');
-            });
-          },
-        },
-      ],
-    );
+  async function handleDeleteAccount() {
+    const confirmed = await confirmAction({
+      title: 'Delete Account',
+      message: 'This permanently deletes your account, claimed device, alarms, and preferences. This cannot be undone.',
+      confirmLabel: 'Delete Account',
+      destructive: true,
+    });
+    if (!confirmed) return;
+    await onDeleteAccount().catch(() => {
+      showMessage('Unable to delete account', 'Please try again.');
+    });
   }
 
   const statusText = state === 'ready' ? 'Connected'
@@ -73,23 +74,24 @@ export function WelcomeScreen({ claimedDevice, onDeviceReset, onSignOut, onDelet
     : state === 'connected_unverified' ? 'Waiting for device status…'
     : 'Disconnected';
   const onConnectionPress = () => { void (busy || device.isConnected ? disconnect() : connect()); };
-  const firstName = userName?.trim().split(/\s+/)[0];
+  const rawFirst = userName?.trim().split(/\s+/)[0];
+  const firstName = rawFirst ? rawFirst[0].toUpperCase() + rawFirst.slice(1) : undefined;
   const upcoming = nextAlarm(alarms);
-  const comingSoon = (feature: string) => Alert.alert(feature, 'This control is coming soon to the Somnara app.');
+  const comingSoon = (feature: string) => showMessage(feature, 'This control is coming soon to the Somnara app.');
 
   return (
     <LinearGradient colors={['#FDF8F0', '#FAF3E6', '#F5EBD8']} style={styles.gradient}>
       <SafeAreaView style={styles.safe}>
-        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        <ScrollView ref={scrollRef} contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           <View style={styles.header}>
-            <SomnaraLogo width={190} style={styles.logo} />
+            <SomnaraLogo width={130} style={styles.logo} />
             <TouchableOpacity
               style={styles.profileBtn}
               onPress={() => setActiveTab('Settings')}
               activeOpacity={0.8}
               accessibilityLabel="Account and settings"
             >
-              <Feather name="user" size={22} color={colors.accent.DEFAULT} />
+              <Feather name="user" size={18} color={colors.accent.DEFAULT} />
             </TouchableOpacity>
           </View>
 
@@ -102,7 +104,7 @@ export function WelcomeScreen({ claimedDevice, onDeviceReset, onSignOut, onDelet
                   <Text style={styles.heroTagline}>A brighter day starts here.</Text>
                 </View>
                 <View style={styles.heroDevice}>
-                  <DeviceIllustration isOn={device.isConnected && device.isOn} size={190} />
+                  <DeviceIllustration isOn={device.isConnected && device.isOn} size={160} />
                 </View>
               </View>
 
@@ -123,13 +125,13 @@ export function WelcomeScreen({ claimedDevice, onDeviceReset, onSignOut, onDelet
 
               <View style={styles.grid}>
                 <QuickTile icon="sunrise" title="Light" sub="Adjust brightness" onPress={() => comingSoon('Light')} />
-                <QuickTile icon="music" title="Sounds" sub="Choose ambient" onPress={() => setActiveTab('Sounds')} />
+                <QuickTile icon="music" title="Sounds" sub="Preview sounds" onPress={() => setActiveTab('Sounds')} />
                 <QuickTile icon="moon" title="Sleep Mode" sub="Wind down" onPress={() => comingSoon('Sleep Mode')} />
                 <QuickTile icon="bar-chart-2" title="Routines" sub="Build habits" onPress={() => comingSoon('Routines')} />
               </View>
 
               <View style={styles.promo}>
-                <Feather name="sun" size={34} color={colors.accent.DEFAULT} />
+                <Feather name="sun" size={28} color={colors.accent.DEFAULT} />
                 <View style={styles.promoText}>
                   <Text style={styles.promoTitle}>Better mornings start tonight.</Text>
                   <Text style={styles.promoSub}>Set your sleep routine</Text>
@@ -157,12 +159,7 @@ export function WelcomeScreen({ claimedDevice, onDeviceReset, onSignOut, onDelet
             </View>
           )}
 
-          {activeTab === 'Sounds' && (
-            <View style={styles.placeholder}>
-              <Feather name="music" size={36} color={colors.text.tertiary} />
-              <Text style={styles.placeholderText}>Sounds coming soon</Text>
-            </View>
-          )}
+          {activeTab === 'Sounds' && <SoundsTab />}
 
           {activeTab === 'Settings' && (
             <View style={styles.settingsContent}>
@@ -209,7 +206,7 @@ export function WelcomeScreen({ claimedDevice, onDeviceReset, onSignOut, onDelet
               />
               <TouchableOpacity
                 style={[styles.helpRow, styles.dangerRow]}
-                onPress={handleDeleteAccount}
+                onPress={() => { void handleDeleteAccount(); }}
                 activeOpacity={0.8}
               >
                 <View style={[styles.helpIcon, styles.dangerIcon]}>
@@ -238,7 +235,7 @@ export function WelcomeScreen({ claimedDevice, onDeviceReset, onSignOut, onDelet
                 accessibilityRole="tab"
                 accessibilityState={{ selected: active }}
               >
-                <Feather name={tab.icon} size={24} color={active ? colors.accent.DEFAULT : colors.text.secondary} />
+                <Feather name={tab.icon} size={22} color={active ? colors.accent.DEFAULT : colors.text.secondary} />
                 <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>{tab.id}</Text>
                 <View style={[styles.tabDot, active && styles.tabDotActive]} />
               </TouchableOpacity>
@@ -264,13 +261,13 @@ function QuickTile({ icon, title, sub, onPress }: {
   return (
     <TouchableOpacity style={styles.tile} onPress={onPress} activeOpacity={0.85}>
       <View style={styles.tileIcon}>
-        <Feather name={icon} size={22} color={colors.accent.DEFAULT} />
+        <Feather name={icon} size={18} color={colors.accent.DEFAULT} />
       </View>
       <View style={styles.tileText}>
         <Text style={styles.tileTitle} numberOfLines={1}>{title}</Text>
         <Text style={styles.tileSub} numberOfLines={1}>{sub}</Text>
       </View>
-      <Feather name="chevron-right" size={16} color={colors.text.secondary} />
+      <Feather name="chevron-right" size={14} color={colors.text.secondary} />
     </TouchableOpacity>
   );
 }
@@ -298,9 +295,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing['6'],
-    paddingTop: spacing['4'],
-    paddingBottom: spacing['2'],
+    paddingHorizontal: spacing['4'],
+    paddingTop: spacing['2'],
+    paddingBottom: 0,
   },
   logo: {
     backgroundColor: 'transparent',
@@ -308,20 +305,20 @@ const styles = StyleSheet.create({
     paddingVertical: 0,
   },
   profileBtn: {
-    width: 48, height: 48, borderRadius: 24,
+    width: 40, height: 40, borderRadius: 20,
     backgroundColor: colors.background.card,
     alignItems: 'center', justifyContent: 'center',
   },
 
   // Home
   content: {
-    gap: spacing['4'],
-    paddingHorizontal: spacing['5'],
+    gap: spacing['3'],
+    paddingHorizontal: spacing['4'],
   },
   hero: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 170,
+    minHeight: 130,
   },
   heroText: {
     flex: 1,
@@ -329,51 +326,51 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   heroGreeting: {
-    fontSize: typography.sizes['2xl'],
+    fontSize: typography.sizes.xl,
     fontWeight: typography.weights.regular,
     color: colors.accent.DEFAULT,
     letterSpacing: typography.letterSpacing.tight,
   },
   heroName: {
-    fontSize: typography.sizes['3xl'],
+    fontSize: typography.sizes['2xl'],
     fontWeight: typography.weights.bold,
     color: colors.accent.DEFAULT,
     letterSpacing: typography.letterSpacing.tight,
   },
   heroTagline: {
-    fontSize: typography.sizes.md,
+    fontSize: typography.sizes.base,
     color: colors.text.secondary,
-    marginTop: spacing['3'],
-    lineHeight: 24,
+    marginTop: spacing['2'],
+    lineHeight: 21,
   },
   heroDevice: {
-    marginRight: -spacing['5'],
+    marginRight: -spacing['4'],
   },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    rowGap: spacing['4'],
+    rowGap: spacing['3'],
   },
   tile: {
     width: '48%',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing['3'],
+    gap: spacing['2'],
     backgroundColor: colors.background.elevated,
     borderRadius: radii.xl,
-    paddingHorizontal: spacing['3'],
-    paddingVertical: spacing['4'],
+    paddingLeft: spacing['3'], paddingRight: spacing['2'],
+    paddingVertical: spacing['3'],
     ...cardShadow,
   },
   tileIcon: {
-    width: 46, height: 46, borderRadius: 23,
+    width: 38, height: 38, borderRadius: 19,
     backgroundColor: colors.background.card,
     alignItems: 'center', justifyContent: 'center',
   },
   tileText: { flex: 1 },
   tileTitle: {
-    fontSize: typography.sizes.base,
+    fontSize: typography.sizes.sm,
     fontWeight: typography.weights.medium,
     color: colors.text.primary,
   },
@@ -385,15 +382,15 @@ const styles = StyleSheet.create({
   promo: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing['4'],
+    gap: spacing['3'],
     backgroundColor: colors.background.elevated,
     borderRadius: radii.xl,
-    padding: spacing['5'],
+    padding: spacing['4'],
     ...cardShadow,
   },
   promoText: { flex: 1 },
   promoTitle: {
-    fontSize: typography.sizes.md,
+    fontSize: typography.sizes.base,
     fontWeight: typography.weights.medium,
     color: colors.text.primary,
   },
@@ -427,7 +424,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   greeting: {
-    fontSize: typography.sizes['3xl'],
+    fontSize: typography.sizes['2xl'],
     fontWeight: typography.weights.regular,
     color: colors.accent.DEFAULT,
     letterSpacing: typography.letterSpacing.tight,
@@ -435,7 +432,7 @@ const styles = StyleSheet.create({
     marginTop: spacing['2'],
   },
   nextIn: {
-    fontSize: typography.sizes.md,
+    fontSize: typography.sizes.base,
     color: colors.text.secondary,
     marginTop: spacing['2'],
   },
@@ -446,7 +443,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background.elevated,
     borderTopLeftRadius: radii.xl,
     borderTopRightRadius: radii.xl,
-    paddingTop: spacing['3'],
+    paddingTop: spacing['2'],
     paddingBottom: spacing['2'],
     shadowColor: '#C49A6C',
     shadowOffset: { width: 0, height: -2 },
@@ -457,10 +454,10 @@ const styles = StyleSheet.create({
   tabItem: {
     flex: 1,
     alignItems: 'center',
-    gap: 4,
+    gap: 2,
   },
   tabLabel: {
-    fontSize: typography.sizes.sm,
+    fontSize: typography.sizes.xs,
     fontWeight: typography.weights.medium,
     color: colors.text.secondary,
   },

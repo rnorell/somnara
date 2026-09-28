@@ -66,8 +66,8 @@ const styles = StyleSheet.create({
   },
   card: {
     borderRadius: radii['2xl'],
-    paddingHorizontal: spacing['6'],
-    paddingVertical: spacing['6'],
+    paddingHorizontal: spacing['5'],
+    paddingVertical: spacing['4'],
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: '#FFFFFFAA',
@@ -100,11 +100,11 @@ const styles = StyleSheet.create({
   body: {},
   dim: { opacity: 0.5 },
   time: {
-    fontSize: 56,
+    fontSize: 40,
     fontWeight: typography.weights.regular,
     color: colors.text.primary,
     letterSpacing: -1,
-    marginTop: spacing['1'],
+    marginTop: 0,
   },
   bottomRow: {
     flexDirection: 'row',
@@ -113,12 +113,12 @@ const styles = StyleSheet.create({
     marginTop: spacing['1'],
   },
   days: {
-    fontSize: typography.sizes.lg,
+    fontSize: typography.sizes.md,
     fontWeight: typography.weights.medium,
     color: colors.text.primary,
   },
   sub: {
-    fontSize: typography.sizes.base,
+    fontSize: typography.sizes.sm,
     color: colors.text.secondary,
     marginTop: 2,
   },

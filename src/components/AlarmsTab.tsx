@@ -243,7 +243,7 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   alarmTime: {
-    fontSize: 48,
+    fontSize: 38,
     fontWeight: typography.weights.regular,
     color: colors.text.primary,
     letterSpacing: -1,

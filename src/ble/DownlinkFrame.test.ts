@@ -3,6 +3,11 @@ import {
   createSkipNextAlarmFrame,
   SKIP_NEXT_ALARM_FRAME_LENGTH,
   SKIP_NEXT_ALARM_OPCODE,
+  AUDIO_CONTROL_OPCODE,
+  createAudioControlFrame,
+  createSetVolumeFrame,
+  SET_VOLUME_FRAME_LENGTH,
+  SET_VOLUME_OPCODE,
 } from './DownlinkFrame';
 
 describe('confirmed app-to-device frames', () => {
@@ -26,5 +31,32 @@ describe('confirmed app-to-device frames', () => {
     [{ sequence: 0, alarmIndex: 10, skip: true }, 'Alarm index'],
   ])('rejects invalid Skip Next input', (input, field) => {
     expect(() => createSkipNextAlarmFrame(input)).toThrow(field);
+  });
+});
+
+describe('audio frames', () => {
+  it('creates an Audio Control 0x09 preview frame', () => {
+    // FF 08 05 09 01 03 32 → 255+8+5+9+1+3+50 = 331 → 0x4B
+    expect(createAudioControlFrame({ sequence: 5, action: 'preview', soundId: 3, volumePercent: 50 }))
+      .toEqual(new Uint8Array([0xFF, 0x08, 0x05, AUDIO_CONTROL_OPCODE, 0x01, 0x03, 0x32, 0x4B]));
+  });
+
+  it('creates an Audio Control 0x09 stop frame', () => {
+    expect(createAudioControlFrame({ sequence: 0, action: 'stop', soundId: 0, volumePercent: 0 }))
+      .toEqual(new Uint8Array([0xFF, 0x08, 0x00, 0x09, 0x00, 0x00, 0x00, 0x10]));
+  });
+
+  it('creates a Set Volume 0x08 frame', () => {
+    // FF 06 01 08 50 → 255+6+1+8+80 = 350 → 0x5E
+    expect(createSetVolumeFrame({ sequence: 1, volumePercent: 80 }))
+      .toEqual(new Uint8Array([0xFF, SET_VOLUME_FRAME_LENGTH, 0x01, SET_VOLUME_OPCODE, 0x50, 0x5E]));
+  });
+
+  it.each([
+    [{ sequence: 0, action: 'preview' as const, soundId: 26, volumePercent: 50 }, 'Sound ID'],
+    [{ sequence: 0, action: 'preview' as const, soundId: 1, volumePercent: 101 }, 'Volume'],
+    [{ sequence: 0xFF, action: 'stop' as const, soundId: 0, volumePercent: 0 }, 'Sequence'],
+  ])('rejects invalid audio input', (input, field) => {
+    expect(() => createAudioControlFrame(input)).toThrow(field);
   });
 });

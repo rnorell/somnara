@@ -14,6 +14,7 @@ import { supabase, configError } from './src/lib/supabase';
 import { storage } from './src/lib/storage';
 import { classifyError } from './src/lib/errors';
 import { initMonitoring } from './src/lib/monitoring';
+import { isDemoDevice } from './src/lib/env';
 import { useAuthDeepLink } from './src/hooks/useAuthDeepLink';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { StatusScreen } from './src/components/StatusScreen';
@@ -172,6 +173,30 @@ function AppContent() {
         actionLabel="Retry"
         onAction={() => setDeviceRetryTick(t => t + 1)}
       />
+    );
+  }
+
+  if (isDemoDevice && !claimedDevice) {
+    const demoDevice: ClaimedDevice = {
+      id: 'demo-device',
+      serial: 'DEMO-0000',
+      name: 'Somnara Light',
+      claimedAt: new Date(0).toISOString(),
+      ownerId: user.id,
+      ownerEmail: user.email,
+    };
+    return (
+      <BleProvider key={`${user.id}:demo`}>
+        <SyncProvider userId={user.id}>
+          <WelcomeScreen
+            claimedDevice={demoDevice}
+            userName={user.name}
+            onDeviceReset={async () => {}}
+            onSignOut={signOut}
+            onDeleteAccount={deleteAccount}
+          />
+        </SyncProvider>
+      </BleProvider>
     );
   }
 
