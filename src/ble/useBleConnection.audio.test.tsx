@@ -7,15 +7,15 @@ import { createManufacturerStatusFixture } from './manufacturerProtocolFixtures'
 
 function statusWithSound(sequence: number, soundId: number, volume: number): Uint8Array {
   const frame = createManufacturerStatusFixture(sequence);
-  frame[17] = volume;
-  frame[18] = soundId;
+  frame[8] = volume;
+  frame[9] = soundId;
   frame[frame.length - 1] = sum8(frame.slice(0, -1));
   return frame;
 }
 
 async function connected(transport = new MockBleTransport()) {
   const hook = await renderHook(() => useBleConnection(() => transport));
-  await act(async () => { await hook.result.current.connect(); });
+  await act(async () => { await hook.result.current.connect(transport.candidate.id); });
   return { transport, ...hook };
 }
 

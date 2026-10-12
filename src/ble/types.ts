@@ -5,6 +5,7 @@ export const SOMNARA_NOTIFY_UUID = '0000AE02-0000-1000-8000-00805F9B34FB';
 export type BleConnectionState =
   | 'idle'
   | 'permission_required'
+  | 'bluetooth_off'
   | 'scanning'
   | 'connecting'
   | 'connected_unverified'
@@ -28,8 +29,11 @@ export interface BleDeviceCandidate {
 
 export interface BleTransport {
   readonly kind: 'native' | 'mock';
+  /** Set the clock and refresh status once the link is up. */
+  readonly syncsClockOnConnect: boolean;
   requestPermissions(): Promise<boolean>;
   scan(timeoutMs?: number): Promise<BleDeviceCandidate>;
+  discover(timeoutMs?: number): Promise<BleDeviceCandidate[]>;
   connect(deviceId: string): Promise<void>;
   negotiateMtu(minimumMtu: number): Promise<number | null>;
   disconnect(): Promise<void>;

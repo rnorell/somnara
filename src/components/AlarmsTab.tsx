@@ -8,14 +8,18 @@ import { useSyncContext } from '../context/SyncContext';
 import { SunriseDurationPicker } from './SunriseDurationPicker';
 import { Toggle } from './Toggle';
 import { alarmSubtitle, daysLabel, formatTime } from '../lib/alarmSchedule';
+import { useDeviceAlarms } from './useDeviceAlarms';
+import { MAX_DEVICE_ALARMS } from '../ble/deviceAlarm';
 
 const DAY_LABELS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 const WEEKDAYS = [1, 2, 3, 4, 5];
 
-function AlarmCard({ alarm, onToggle, onDelete, onEdit }: {
+function AlarmCard({ alarm, busy, onToggle, onDelete, onSkip, onEdit }: {
   alarm: Alarm;
+  busy: boolean;
   onToggle: () => void;
   onDelete: () => void;
+  onSkip: () => void;
   onEdit: () => void;
 }) {
   return (
@@ -30,11 +34,14 @@ function AlarmCard({ alarm, onToggle, onDelete, onEdit }: {
         </Text>
         <Text style={styles.alarmDays}>{daysLabel(alarm.days)}</Text>
         <Text style={styles.alarmLabel}>{alarmSubtitle(alarm)}</Text>
+        <TouchableOpacity onPress={onSkip} disabled={busy} accessibilityLabel={alarm.skipNext ? 'Clear skip' : 'Skip tomorrow'}>
+          <Text style={styles.skipText}>{alarm.skipNext ? 'Clear skip' : 'Skip tomorrow'}</Text>
+        </TouchableOpacity>
       </View>
       <View style={styles.alarmCardRight}>
-        <Toggle value={alarm.enabled} onToggle={onToggle} label="Alarm enabled" />
+        <Toggle value={alarm.enabled} onToggle={busy ? () => undefined : onToggle} label="Alarm enabled" />
         <View style={styles.cardActions}>
-          <TouchableOpacity onPress={onDelete} hitSlop={12} style={styles.deleteBtn} accessibilityLabel="Delete alarm">
+          <TouchableOpacity onPress={onDelete} disabled={busy} hitSlop={12} style={styles.deleteBtn} accessibilityLabel="Delete alarm">
             <Feather name="trash-2" size={16} color={colors.text.tertiary} />
           </TouchableOpacity>
           <Feather name="chevron-right" size={20} color={colors.text.secondary} />
@@ -64,7 +71,8 @@ function TimeSpinner({ value, min, max, onChange }: {
 }
 
 export function AlarmsTab() {
-  const { alarms, setAlarms, preferences } = useSyncContext();
+  const { alarms, preferences } = useSyncContext();
+  const { ready, busy, error, save, toggle, remove, skip } = useDeviceAlarms();
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formHour, setFormHour] = useState(7);
@@ -100,31 +108,30 @@ export function AlarmsTab() {
   };
 
   const saveAlarm = () => {
-    if (formDays.length === 0) return;
-    if (editingId) {
-      setAlarms(alarms.map(a => a.id === editingId
-        ? { ...a, hour: formHour, minute: formMinute, days: [...formDays].sort(), sunriseDuration: formSunrise }
-        : a));
-    } else {
-      setAlarms([...alarms, {
-        id: Crypto.randomUUID(),
-        hour: formHour,
-        minute: formMinute,
-        days: [...formDays].sort(),
-        enabled: true,
-        label: '',
-        sunriseDuration: formSunrise,
-      }]);
-    }
+    if (formDays.length === 0 || busy) return;
+    if (!editingId && alarms.length >= MAX_DEVICE_ALARMS) return;
+    const existing = alarms.find(alarm => alarm.id === editingId);
+    void save({
+      id: existing?.id ?? Crypto.randomUUID(),
+      hour: formHour,
+      minute: formMinute,
+      days: [...formDays].sort(),
+      enabled: existing?.enabled ?? true,
+      label: existing?.label ?? '',
+      sunriseDuration: formSunrise,
+      deviceSlot: existing?.deviceSlot,
+      finalBrightness: existing?.finalBrightness,
+      soundId: existing?.soundId,
+      volume: existing?.volume,
+      skipNext: existing?.skipNext,
+    });
     closeForm();
   };
 
-  const toggleAlarm = (id: string) => {
-    setAlarms(alarms.map(a => a.id === id ? { ...a, enabled: !a.enabled } : a));
-  };
-
   const deleteAlarm = (id: string) => {
-    setAlarms(alarms.filter(a => a.id !== id));
+    const alarm = alarms.find(item => item.id === id);
+    if (!alarm || busy) return;
+    void remove(alarm);
     if (editingId === id) closeForm();
   };
 
@@ -133,18 +140,23 @@ export function AlarmsTab() {
       <View style={styles.notice}>
         <Feather name="info" size={14} color={colors.accent.dark} />
         <Text style={styles.noticeText}>
-          Alarms are saved in the app but not yet sent to your Somnara, so the light won't wake you with them yet.
+          {ready
+            ? 'Changes are sent to your Somnara.'
+            : 'Connect your Somnara to send these alarms to the clock.'}
         </Text>
       </View>
+      {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
       {/* Alarm list */}
       {alarms.map(alarm => (
         <AlarmCard
           key={alarm.id}
           alarm={alarm}
-          onToggle={() => toggleAlarm(alarm.id)}
+          busy={busy}
+          onToggle={() => toggle(alarm)}
           onDelete={() => deleteAlarm(alarm.id)}
-          onEdit={() => openEditForm(alarm)}
+          onSkip={() => { void skip(alarm); }}
+          onEdit={() => { if (!busy) openEditForm(alarm); }}
         />
       ))}
 
@@ -212,7 +224,12 @@ export function AlarmsTab() {
 
       {/* Add alarm button */}
       {!formOpen && (
-        <TouchableOpacity style={styles.addBtn} onPress={openAddForm} activeOpacity={0.8}>
+        <TouchableOpacity
+          style={[styles.addBtn, (busy || alarms.length >= MAX_DEVICE_ALARMS) && styles.saveBtnDisabled]}
+          onPress={openAddForm}
+          disabled={busy || alarms.length >= MAX_DEVICE_ALARMS}
+          activeOpacity={0.8}
+        >
           <Feather name="plus" size={18} color={colors.text.inverse} />
           <Text style={styles.addBtnText}>Add Alarm</Text>
         </TouchableOpacity>
@@ -267,6 +284,15 @@ const styles = StyleSheet.create({
     fontSize: typography.sizes.base,
     color: colors.text.secondary,
     marginTop: 2,
+  },
+  skipText: {
+    fontSize: typography.sizes.sm,
+    color: colors.accent.DEFAULT,
+    marginTop: spacing['2'],
+  },
+  errorText: {
+    fontSize: typography.sizes.sm,
+    color: '#C0392B',
   },
   alarmCardRight: {
     alignItems: 'flex-end',

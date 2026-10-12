@@ -14,8 +14,8 @@ describe('device BLE state mapping', () => {
       playbackState: 'unknown',
       clockValidity: 'valid',
       storedAlarmCount: 2,
-      firmwareVersion: '0.0.2+0',
-      hardwareVersion: '0',
+      firmwareVersion: null,
+      hardwareVersion: null,
     });
   });
 });

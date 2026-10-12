@@ -32,10 +32,6 @@ export function readoutRows(
     rows.push(['Status report', 'None received yet']);
   } else {
     rows.push(
-      ['Firmware', `${status.firmwareMajor}.${status.firmwareMinor}.${status.firmwarePatch} (build ${status.firmwareBuild})`],
-      ['Hardware revision', String(status.hardwareRevision)],
-      ['Protocol', `${status.protocolMajor}.${status.protocolMinor}`],
-      ['Product ID', String(status.productId)],
       ['Power', status.power ? 'On' : 'Off'],
       ['Brightness', `${status.brightnessPercent}%`],
       ['CCT (W / WW)', `${status.cctW} / ${status.cctWw}`],
@@ -43,7 +39,6 @@ export function readoutRows(
       ['Volume', `${status.volumePercent}%`],
       ['Clock valid', status.clockValid ? 'Yes' : 'No'],
       ['Alarms on device', String(status.alarmCount)],
-      ['Device state', String(status.deviceState)],
       ['Flags', hex(status.flags)],
     );
   }

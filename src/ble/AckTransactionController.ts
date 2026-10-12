@@ -63,6 +63,14 @@ export class AckTransactionController {
     return sequence;
   }
 
+  cancel(): void {
+    const active = this.active;
+    if (!active) return;
+    clearTimeout(active.timeout);
+    this.active = null;
+    active.reject(new BleProtocolError('command_timeout', 'Somnara disconnected.'));
+  }
+
   execute(requestOpcode: number, makeFrame: (sequence: number) => Uint8Array): Promise<AckResult> {
     if (this.active) {
       return Promise.reject(new BleProtocolError('command_in_flight', 'Only one BLE command can wait for an ACK.'));

@@ -19,19 +19,28 @@ jest.mock('../components/SyncStatusCard', () => ({ SyncStatusCard: () => null })
 jest.mock('./HelpScreen', () => ({ HelpScreen: () => null }));
 jest.mock('../context/BleContext', () => ({
   useSharedBleConnection: () => ({
-    deviceStatus: { isConnected: false, isOn: false, clockValidity: 'valid', firmwareVersion: null },
+    deviceStatus: { isConnected: false, isOn: false, brightness: 80, clockValidity: 'valid', firmwareVersion: null },
     state: 'disconnected',
     error: null,
+    failureCode: null,
     protocolError: null,
     latestStatus: null,
     latestAlarmList: null,
     connect: mockConnect,
     disconnect: mockDisconnect,
+    foundDevices: [],
     playingSoundId: null,
     commandPending: false,
     playSound: jest.fn(),
     stopSound: jest.fn(),
     setVolume: jest.fn(),
+    setPower: jest.fn(() => Promise.resolve()),
+    setBrightness: jest.fn(() => Promise.resolve()),
+    upsertDeviceAlarm: jest.fn(() => Promise.resolve(null)),
+    deleteDeviceAlarm: jest.fn(() => Promise.resolve(null)),
+    skipDeviceAlarm: jest.fn(() => Promise.resolve(null)),
+    readDeviceAlarms: jest.fn(() => Promise.resolve(null)),
+    replaceDeviceAlarms: jest.fn(() => Promise.resolve(null)),
   }),
 }));
 jest.mock('../context/SyncContext', () => ({
@@ -82,10 +91,10 @@ test('next alarm card opens Alarms and its toggle disables the alarm', async () 
 
 test('quick tiles show a message or navigate', async () => {
   await renderScreen();
-  await fireEvent.press(screen.getByText('Light'));
+  expect(screen.getByLabelText('Turn on')).toBeTruthy();
   await fireEvent.press(screen.getByText('Sleep Mode'));
   await fireEvent.press(screen.getByText('Routines'));
-  expect(mockShowMessage).toHaveBeenCalledTimes(3);
+  expect(mockShowMessage).toHaveBeenCalledTimes(2);
   await fireEvent.press(screen.getAllByText('Sounds')[0]);
   expect(screen.getByText('Connect your Somnara')).toBeTruthy();
 });

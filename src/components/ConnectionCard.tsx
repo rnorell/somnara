@@ -15,7 +15,7 @@ interface Props {
 // onPress does (connect / cancel / disconnect).
 export function ConnectionCard({ deviceName, isConnected, busy, statusText, error, onPress }: Props) {
   const dotColor = error ? '#C0392B' : isConnected ? colors.success : busy ? colors.glow.warm : colors.text.tertiary;
-  const actionLabel = busy ? 'Cancel' : isConnected ? 'Disconnect' : 'Connect';
+  const actionLabel = busy ? 'Cancel' : isConnected ? 'Disconnect' : error ? 'Try again' : 'Connect';
 
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel={`${statusText}. ${actionLabel}`}>

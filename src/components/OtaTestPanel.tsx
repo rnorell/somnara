@@ -15,7 +15,7 @@ import { requestBluetoothPermissions } from '../ble/requestBluetoothPermissions'
 import { useSharedBleConnection } from '../context/BleContext';
 import {
   applyOtaEvent, approvedFirmwareFor, beginReconnection, BUNDLED_FIRMWARE as BUNDLED_FIRMWARE_RECORD,
-  BUNDLED_FIRMWARE_SHA256, confirmVersionReadback, createDiagnosticReport, initialOtaSession,
+  BUNDLED_FIRMWARE_SHA256, createDiagnosticReport, initialOtaSession,
   OtaSession, validateFirmware,
 } from '../ota/OtaSession';
 
@@ -57,27 +57,6 @@ export function OtaTestPanel({ visible, onClose }: Props) {
     });
     return () => subscription.remove();
   }, []);
-
-  useEffect(() => {
-    if (!normalBle.latestStatus || session.phase !== 'reconnecting') return;
-    const status = normalBle.latestStatus;
-    const version = `${status.firmwareMajor}.${status.firmwareMinor}.${status.firmwarePatch}+${status.firmwareBuild}`;
-    setSession(current => {
-      try {
-        return confirmVersionReadback(current, version);
-      } catch (error) {
-        const code = error instanceof Error ? error.message : 'FIRMWARE_VERSION_READBACK_FAILED';
-        return applyOtaEvent(current, {
-          phase: 'failed',
-          progress: current.progress,
-          code,
-          message: messageForError(error),
-          recoverable: true,
-          timestamp: new Date().toISOString(),
-        });
-      }
-    });
-  }, [normalBle.latestStatus, session.phase]);
 
   const report = useMemo(
     () => createDiagnosticReport(session, Platform.OS, Platform.Version),
@@ -208,7 +187,8 @@ export function OtaTestPanel({ visible, onClose }: Props) {
   function reconnectAndVerify() {
     return run(async () => {
       setSession(current => beginReconnection(current));
-      await normalBle.connect();
+      if (!session.target) throw new Error('Choose a Somnara before reconnecting.');
+      await normalBle.connect(session.target.id);
     });
   }
 

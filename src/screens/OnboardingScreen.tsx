@@ -158,7 +158,9 @@ function BluetoothStep({ onNext }: { onNext: () => void }) {
             ? 'Somnara connected'
             : state === 'permission_required'
               ? 'Bluetooth permission required'
-              : 'Connection stopped';
+              : state === 'bluetooth_off'
+                ? 'Bluetooth is off'
+                : 'Connection stopped';
   const message = state === 'connected_unverified'
     ? 'Waiting for your Somnara to report its status. Accept the Bluetooth pairing prompt if one appears.'
     : state === 'permission_required'

@@ -23,7 +23,7 @@ it('keeps a verified native connection when setup is replaced by the home screen
     return <BleProvider transportFactory={factory}>{home ? <Home /> : <Setup />}</BleProvider>;
   }
   const screen = await render(<App home={false} />);
-  await act(async () => { await connection.connect(); });
+  await act(async () => { await connection.connect(transport.candidate.id); });
   await act(async () => { transport.emitNotification(createManufacturerStatusFixture()); });
   expect(screen.getByText('Setup ready')).toBeTruthy();
   await screen.rerender(<App home />);

@@ -5,20 +5,22 @@ import { colors, typography, spacing, radii } from '../theme';
 import { useSyncContext } from '../context/SyncContext';
 import { alarmSubtitle, daysLabel, formatTime, nextAlarm } from '../lib/alarmSchedule';
 import { Toggle } from './Toggle';
+import { useDeviceAlarms } from './useDeviceAlarms';
 
 interface Props {
   onPress: () => void;
 }
 
 export function NextAlarmCard({ onPress }: Props) {
-  const { alarms, setAlarms } = useSyncContext();
+  const { alarms } = useSyncContext();
+  const { busy, toggle: toggleAlarm } = useDeviceAlarms();
   const upcoming = nextAlarm(alarms);
   // Fall back to the first alarm so a disabled one can be re-enabled from Home.
   const alarm = upcoming?.alarm ?? alarms[0];
 
   const toggle = () => {
-    if (!alarm) return;
-    setAlarms(alarms.map(a => a.id === alarm.id ? { ...a, enabled: !a.enabled } : a));
+    if (!alarm || busy) return;
+    toggleAlarm(alarm);
   };
 
   return (
@@ -40,7 +42,7 @@ export function NextAlarmCard({ onPress }: Props) {
               <View>
                 <Text style={styles.days}>{daysLabel(alarm.days)}</Text>
                 <Text style={styles.sub}>{alarmSubtitle(alarm)}</Text>
-                <Text style={styles.appOnly}>Saved in app · not yet on device</Text>
+                <Text style={styles.appOnly}>{alarm.deviceSlot == null ? 'Saved in this app' : 'On your Somnara'}</Text>
               </View>
               <Feather name="chevron-right" size={20} color={colors.text.secondary} />
             </View>

@@ -1,8 +1,8 @@
 import { sum8 } from './AckFrame';
 import {
-  ALARM_LIST_LENGTH,
+  ALARM_LIST_END_LENGTH,
   ALARM_LIST_OPCODE,
-  ALARM_SLOT_LENGTH,
+  ALARM_RECORD_LENGTH,
   STATUS_REPORT_LENGTH,
   STATUS_REPORT_OPCODE,
 } from './UplinkFrame';
@@ -15,24 +15,33 @@ function finishFrame(frame: Uint8Array): Uint8Array {
 export function createManufacturerStatusFixture(sequence = 0xFF): Uint8Array {
   return finishFrame(new Uint8Array([
     0xFF, STATUS_REPORT_LENGTH, sequence, STATUS_REPORT_OPCODE,
-    0, 11, 1, 0, 0, 0, 2, 0, 0,
-    1, 60, 100, 0, 30, 4, 1, 2, 2, 0, 0,
+    1, 60, 100, 0, 30, 4, 1, 2, 0, 0,
   ]));
 }
 
-export function createManufacturerAlarmListFixture(sequence = 7): Uint8Array {
-  const frame = new Uint8Array(ALARM_LIST_LENGTH);
-  frame.set([0xFF, ALARM_LIST_LENGTH, sequence, ALARM_LIST_OPCODE, 0, 3, 0, 2, 0, 1, 0]);
-  frame.set([0x03, 7, 30, 0x3E, 30, 80, 4, 45, 0], 11);
-  frame.set([0x07, 8, 15, 0x41, 15, 65, 5, 35, 0], 11 + ALARM_SLOT_LENGTH);
-  frame[8] = sum8(frame.slice(11, 101));
-  return finishFrame(frame);
+export function createManufacturerAlarmListFrames(sequence = 7): Uint8Array[] {
+  const records = [
+    alarmRecordFrame(sequence, [0, 0x01, 7, 30, 0x3E, 30, 80, 4, 45]),
+    alarmRecordFrame(sequence, [1, 0x03, 8, 15, 0x41, 15, 65, 5, 35]),
+  ];
+  const listed = new Uint8Array(records.length * 13);
+  records.forEach((frame, index) => listed.set(frame.slice(4, 17), index * 13));
+  const end = new Uint8Array([
+    0xFF, ALARM_LIST_END_LENGTH, sequence, ALARM_LIST_OPCODE, 0xFF, 3, 0, records.length, sum8(listed), 0,
+  ]);
+  return [...records, finishFrame(end)];
+}
+
+function alarmRecordFrame(sequence: number, body: number[]): Uint8Array {
+  return finishFrame(new Uint8Array([
+    0xFF, ALARM_RECORD_LENGTH, sequence, ALARM_LIST_OPCODE, ...body, 0, 0, 0, 0, 0,
+  ]));
 }
 
 export const manufacturerProtocolFixtures = {
   automaticStatus: createManufacturerStatusFixture(),
   requestedStatus: createManufacturerStatusFixture(8),
-  alarmList: createManufacturerAlarmListFixture(),
+  alarmList: createManufacturerAlarmListFrames(),
   malformedHeader: new Uint8Array([0x00, 5, 0xFF, STATUS_REPORT_OPCODE, 0x12]),
   malformedChecksum: (() => {
     const frame = createManufacturerStatusFixture();

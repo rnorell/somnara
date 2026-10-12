@@ -6,6 +6,8 @@ import { Feather } from '@expo/vector-icons';
 import { colors, typography, spacing, radii } from '../theme';
 import { DeviceIllustration } from '../components/DeviceIllustration';
 import { ConnectionCard } from '../components/ConnectionCard';
+import { LightControls } from '../components/LightControls';
+import { DevicePicker } from '../components/DevicePicker';
 import { Button } from '../components/Button';
 import { NextAlarmCard } from '../components/NextAlarmCard';
 import { AlarmsTab } from '../components/AlarmsTab';
@@ -17,6 +19,7 @@ import { SyncStatusCard } from '../components/SyncStatusCard';
 import { ClockReliabilityWarning } from '../components/ClockReliabilityWarning';
 import { useGreeting } from '../hooks/useGreeting';
 import { useSharedBleConnection } from '../context/BleContext';
+import { connectionStatusLabel } from '../ble/connectionStatus';
 import { useSyncContext } from '../context/SyncContext';
 import { HelpScreen } from './HelpScreen';
 import { ClaimedDevice } from '../models/Device';
@@ -37,14 +40,30 @@ const TABS: { id: Tab; icon: React.ComponentProps<typeof Feather>['name'] }[] = 
 interface WelcomeScreenProps {
   claimedDevice: ClaimedDevice;
   onDeviceReset: () => Promise<void>;
-  onSignOut: () => void;
-  onDeleteAccount: () => Promise<void>;
+  onSignOut?: () => void;
+  onDeleteAccount?: () => Promise<void>;
   userName?: string;
+  /** Sign-out and account deletion. Left off in offline mode; the handlers stay available for account mode. */
+  accountFeatures?: boolean;
+  /** Saved Bluetooth id. When set, connect reconnects to it instead of scanning. */
+  preferredDeviceId?: string;
+  devicePresentation?: 'account' | 'local' | 'hidden';
 }
 
-export function WelcomeScreen({ claimedDevice, onDeviceReset, onSignOut, onDeleteAccount, userName }: WelcomeScreenProps) {
+export function WelcomeScreen({
+  claimedDevice,
+  onDeviceReset,
+  onSignOut,
+  onDeleteAccount,
+  userName,
+  accountFeatures = true,
+  preferredDeviceId,
+  devicePresentation = 'account',
+}: WelcomeScreenProps) {
   const greeting = useGreeting();
-  const { deviceStatus: device, state, error, connect, disconnect } = useSharedBleConnection();
+  const {
+    deviceStatus: device, state, error, failureCode, foundDevices, connect, disconnect, commandPending, setPower, setBrightness,
+  } = useSharedBleConnection();
   const busy = state === 'scanning' || state === 'connecting' || state === 'connected_unverified';
   const { preferences, setPreferences, alarms } = useSyncContext();
   const [activeTab, setActiveTabState] = useState<Tab>('Home');
@@ -64,17 +83,14 @@ export function WelcomeScreen({ claimedDevice, onDeviceReset, onSignOut, onDelet
       destructive: true,
     });
     if (!confirmed) return;
-    await onDeleteAccount().catch(() => {
+    await onDeleteAccount?.().catch(() => {
       showMessage('Unable to delete account', 'Please try again.');
     });
   }
 
-  const statusText = state === 'ready' ? 'Connected'
-    : state === 'scanning' ? 'Looking for Somnara…'
-    : state === 'connecting' ? 'Connecting…'
-    : state === 'connected_unverified' ? 'Waiting for device status…'
-    : 'Disconnected';
-  const onConnectionPress = () => { void (busy || device.isConnected ? disconnect() : connect()); };
+  const showDeviceList = !preferredDeviceId && !device.isConnected && !busy && foundDevices.length > 0;
+  const statusText = connectionStatusLabel(state, failureCode ?? null, showDeviceList);
+  const onConnectionPress = () => { void (busy || device.isConnected ? disconnect() : connect(preferredDeviceId)); };
   const rawFirst = userName?.trim().split(/\s+/)[0];
   const firstName = rawFirst ? rawFirst[0].toUpperCase() + rawFirst.slice(1) : undefined;
   const upcoming = nextAlarm(alarms);
@@ -122,10 +138,23 @@ export function WelcomeScreen({ claimedDevice, onDeviceReset, onSignOut, onDelet
                 onPress={onConnectionPress}
               />
 
+              {showDeviceList && (
+                <DevicePicker devices={foundDevices} onSelect={deviceId => { void connect(deviceId); }} />
+              )}
+
               <NextAlarmCard onPress={() => setActiveTab('Alarms')} />
 
+              <LightControls
+                connected={device.isConnected}
+                powerOn={device.isOn}
+                brightness={device.brightness}
+                busy={commandPending}
+                onPower={setPower}
+                onBrightness={setBrightness}
+              />
+
               <View style={styles.grid}>
-                <QuickTile icon="sunrise" title="Light" sub="Adjust brightness" onPress={() => comingSoon('Light')} />
+                <QuickTile icon="sunrise" title="Light" sub="Adjust brightness" onPress={() => setActiveTab('Home')} />
                 <QuickTile icon="music" title="Sounds" sub="Preview sounds" onPress={() => setActiveTab('Sounds')} />
                 <QuickTile icon="moon" title="Sleep Mode" sub="Wind down" onPress={() => comingSoon('Sleep Mode')} />
                 <QuickTile icon="bar-chart-2" title="Routines" sub="Build habits" onPress={() => comingSoon('Routines')} />
@@ -143,7 +172,7 @@ export function WelcomeScreen({ claimedDevice, onDeviceReset, onSignOut, onDelet
                 </TouchableOpacity>
               </View>
 
-              <Text style={styles.footnote}>Device status is live. Power controls and alarm transfer are not available yet.</Text>
+              <Text style={styles.footnote}>Device status is live. Alarms are sent while Somnara is connected.</Text>
             </View>
           )}
 
@@ -172,10 +201,13 @@ export function WelcomeScreen({ claimedDevice, onDeviceReset, onSignOut, onDelet
                 onChange={d => setPreferences({ sunriseDuration: d as 15 | 30 | 45 })}
               />
               <Text style={[styles.settingsSection, { marginTop: spacing['6'] }]}>MY DEVICE</Text>
-              <DeviceOwnershipCard
-                device={claimedDevice}
-                onReset={onDeviceReset}
-              />
+              {devicePresentation !== 'hidden' && (
+                <DeviceOwnershipCard
+                  device={claimedDevice}
+                  presentation={devicePresentation === 'local' ? 'local' : 'account'}
+                  onReset={onDeviceReset}
+                />
+              )}
               <Text style={[styles.settingsSection, { marginTop: spacing['6'] }]}>DEVICE READOUT</Text>
               <DeviceReadout />
               {isOtaTestEnabled && (
@@ -201,26 +233,30 @@ export function WelcomeScreen({ claimedDevice, onDeviceReset, onSignOut, onDelet
                 </View>
                 <Feather name="chevron-right" size={16} color={colors.text.tertiary} />
               </TouchableOpacity>
-              <Button
-                label="Sign Out"
-                onPress={onSignOut}
-                variant="secondary"
-                style={{ marginTop: spacing['4'] }}
-              />
-              <TouchableOpacity
-                style={[styles.helpRow, styles.dangerRow]}
-                onPress={() => { void handleDeleteAccount(); }}
-                activeOpacity={0.8}
-              >
-                <View style={[styles.helpIcon, styles.dangerIcon]}>
-                  <Feather name="alert-triangle" size={18} color="#C0392B" />
-                </View>
-                <View style={styles.helpText}>
-                  <Text style={[styles.helpTitle, styles.dangerText]}>Delete Account</Text>
-                  <Text style={styles.helpSub}>Permanently deletes your account and data</Text>
-                </View>
-                <Feather name="chevron-right" size={16} color={colors.text.tertiary} />
-              </TouchableOpacity>
+              {accountFeatures && (
+                <>
+                  <Button
+                    label="Sign Out"
+                    onPress={() => onSignOut?.()}
+                    variant="secondary"
+                    style={{ marginTop: spacing['4'] }}
+                  />
+                  <TouchableOpacity
+                    style={[styles.helpRow, styles.dangerRow]}
+                    onPress={() => { void handleDeleteAccount(); }}
+                    activeOpacity={0.8}
+                  >
+                    <View style={[styles.helpIcon, styles.dangerIcon]}>
+                      <Feather name="alert-triangle" size={18} color="#C0392B" />
+                    </View>
+                    <View style={styles.helpText}>
+                      <Text style={[styles.helpTitle, styles.dangerText]}>Delete Account</Text>
+                      <Text style={styles.helpSub}>Permanently deletes your account and data</Text>
+                    </View>
+                    <Feather name="chevron-right" size={16} color={colors.text.tertiary} />
+                  </TouchableOpacity>
+                </>
+              )}
             </View>
           )}
         </ScrollView>

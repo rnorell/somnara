@@ -86,4 +86,17 @@ describe('storage', () => {
   it('throws for an empty/unsafe user id rather than writing to a shared key', async () => {
     await expect(storage.saveAlarms('', [VALID_ALARM])).rejects.toThrow();
   });
+
+  it('round-trips the saved Bluetooth device separately from account data', async () => {
+    await storage.saveBleDevice({ id: 'ble-1', name: 'Bedroom' });
+    await storage.clear(USER);
+    await expect(storage.loadBleDevice()).resolves.toEqual({ id: 'ble-1', name: 'Bedroom' });
+    await storage.clearBleDevice();
+    await expect(storage.loadBleDevice()).resolves.toBeNull();
+  });
+
+  it('rejects a malformed saved Bluetooth device', async () => {
+    await AsyncStorage.setItem('@somnara/local/ble-device', JSON.stringify({ id: '', name: 'Bedroom' }));
+    await expect(storage.loadBleDevice()).resolves.toBeNull();
+  });
 });

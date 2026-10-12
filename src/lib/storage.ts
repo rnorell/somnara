@@ -31,6 +31,20 @@ function isAlarm(value: unknown): value is Alarm {
     && (alarm.skipNext === undefined || typeof alarm.skipNext === 'boolean');
 }
 
+export interface SavedBleDevice {
+  id: string;
+  name: string;
+}
+
+const BLE_DEVICE_KEY = '@somnara/local/ble-device';
+
+function isSavedBleDevice(value: unknown): value is SavedBleDevice {
+  if (!value || typeof value !== 'object') return false;
+  const device = value as SavedBleDevice;
+  return typeof device.id === 'string' && device.id.length > 0 && device.id.length <= 80
+    && typeof device.name === 'string' && device.name.length > 0 && device.name.length <= 60;
+}
+
 function isPreferences(value: unknown): value is Preferences {
   if (!value || typeof value !== 'object') return false;
   const prefs = value as Preferences;
@@ -75,5 +89,20 @@ export const storage = {
       key(userId, 'preferences'),
       key(userId, 'device_name'),
     ]);
+  },
+
+  async loadBleDevice(): Promise<SavedBleDevice | null> {
+    const raw = await AsyncStorage.getItem(BLE_DEVICE_KEY);
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    return isSavedBleDevice(parsed) ? parsed : null;
+  },
+  async saveBleDevice(device: SavedBleDevice): Promise<void> {
+    const saved: SavedBleDevice = { id: device.id.slice(0, 80), name: device.name.slice(0, 60) };
+    if (!isSavedBleDevice(saved)) throw new Error('A Bluetooth device id and name are required');
+    await AsyncStorage.setItem(BLE_DEVICE_KEY, JSON.stringify(saved));
+  },
+  async clearBleDevice(): Promise<void> {
+    await AsyncStorage.removeItem(BLE_DEVICE_KEY);
   },
 };

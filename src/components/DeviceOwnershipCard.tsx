@@ -11,6 +11,8 @@ import { ClaimedDevice } from '../models/Device';
 interface Props {
   device: ClaimedDevice;
   onReset: () => Promise<void>;
+  /** `account` is the original claim card. `local` forgets a phone-saved Bluetooth device. */
+  presentation?: 'account' | 'local';
 }
 
 function maskSerial(serial: string) {
@@ -25,7 +27,7 @@ function formatDate(iso: string) {
   });
 }
 
-export function DeviceOwnershipCard({ device, onReset }: Props) {
+export function DeviceOwnershipCard({ device, onReset, presentation = 'account' }: Props) {
   const [showTransfer, setShowTransfer] = useState(false);
   const [transferEmail, setTransferEmail] = useState('');
   const [transferLoading, setTransferLoading] = useState(false);
@@ -41,16 +43,51 @@ export function DeviceOwnershipCard({ device, onReset }: Props) {
   }
 
   async function handleReset() {
+    const local = presentation === 'local';
     const confirmed = await confirmAction({
-      title: 'Unlink Device',
-      message: `This will remove "${device.name}" from your account. It does not factory-reset the physical device.`,
-      confirmLabel: 'Unlink Device',
+      title: local ? 'Forget device' : 'Unlink Device',
+      message: local
+        ? `This phone will forget "${device.name}". The clock itself is not reset.`
+        : `This will remove "${device.name}" from your account. It does not factory-reset the physical device.`,
+      confirmLabel: local ? 'Forget device' : 'Unlink Device',
       destructive: true,
     });
     if (!confirmed) return;
     await onReset().catch(() => {
-      showMessage('Unable to unlink', 'The secure device service rejected the request. No changes were made.');
+      showMessage(
+        local ? 'Unable to forget device' : 'Unable to unlink',
+        local ? 'The saved device is still on this phone.' : 'The secure device service rejected the request. No changes were made.',
+      );
     });
+  }
+
+  if (presentation === 'local') {
+    return (
+      <View style={styles.card}>
+        <View style={styles.cardHeader}>
+          <View style={styles.headerLeft}>
+            <View style={styles.iconBadge}>
+              <Feather name="bluetooth" size={16} color={colors.accent.DEFAULT} />
+            </View>
+            <View>
+              <Text style={styles.deviceName}>{device.name}</Text>
+              <Text style={styles.deviceSerial}>Saved on this phone</Text>
+            </View>
+          </View>
+        </View>
+        <View style={styles.divider} />
+        <TouchableOpacity style={styles.actionRow} onPress={() => { void handleReset(); }} activeOpacity={0.7}>
+          <View style={styles.actionLeft}>
+            <Feather name="alert-triangle" size={16} color="#C0392B" />
+            <View>
+              <Text style={[styles.actionTitle, styles.actionDanger]}>Forget device</Text>
+              <Text style={styles.actionSub}>Scan for a Somnara again next time</Text>
+            </View>
+          </View>
+          <Feather name="chevron-right" size={16} color={colors.text.tertiary} />
+        </TouchableOpacity>
+      </View>
+    );
   }
 
   return (

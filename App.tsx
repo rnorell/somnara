@@ -15,6 +15,8 @@ import { storage } from './src/lib/storage';
 import { classifyError } from './src/lib/errors';
 import { initMonitoring } from './src/lib/monitoring';
 import { isDemoDevice } from './src/lib/env';
+import { isOfflineController } from './src/lib/appMode';
+import { OfflineApp } from './src/offline/OfflineApp';
 import { useAuthDeepLink } from './src/hooks/useAuthDeepLink';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { StatusScreen } from './src/components/StatusScreen';
@@ -25,12 +27,16 @@ initMonitoring();
 export default function App() {
   return (
     <ErrorBoundary>
-      <AppContent />
+      {isOfflineController ? <OfflineApp /> : <AccountApp />}
     </ErrorBoundary>
   );
 }
 
-function AppContent() {
+/**
+ * Original account startup: Supabase session, device activation, then onboarding.
+ * Not mounted while APP_MODE is `offline`. Set APP_MODE to `account` in src/lib/appMode.ts to restore it.
+ */
+function AccountApp() {
   const [user, setUser] = useState<User | null>(null);
   const [claimedDevice, setClaimedDevice] = useState<ClaimedDevice | null>(null);
   const [onboarded, setOnboarded] = useState(false);
