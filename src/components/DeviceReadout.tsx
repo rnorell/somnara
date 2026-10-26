@@ -32,6 +32,7 @@ export function readoutRows(
     rows.push(['Status report', 'None received yet']);
   } else {
     rows.push(
+      ['Firmware', `${status.firmwareMajor}.${status.firmwareMinor}.${status.firmwarePatch}+${status.firmwareBuild}`],
       ['Power', status.power ? 'On' : 'Off'],
       ['Brightness', `${status.brightnessPercent}%`],
       ['CCT (W / WW)', `${status.cctW} / ${status.cctWw}`],

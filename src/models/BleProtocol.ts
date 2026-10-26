@@ -39,8 +39,9 @@ export function assertSoundId(value: number): SoundId {
   return value;
 }
 
+/** The clock truncates this division. Rounding 10% up to 230 is rejected. */
 export function brightnessToInverseRaw(percent: number): number {
-  return Math.round(255 - assertPercent(percent) * 255 / 100);
+  return Math.floor((100 - assertPercent(percent)) * 255 / 100);
 }
 
 export function validateDeviceAlarmProfile(profile: DeviceAlarmProfile): DeviceAlarmProfile {

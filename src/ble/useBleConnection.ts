@@ -30,7 +30,7 @@ import {
   UPSERT_ALARM_OPCODE,
 } from './DownlinkFrame';
 import { DeviceAlarmWrite, MAX_DEVICE_ALARMS } from './deviceAlarm';
-import { AlarmListReader, AlarmListReport, applyAlarmRecord, DeviceStatusReport, dispatchUplinkNotification, MINIMUM_ALARM_LIST_MTU } from './UplinkFrame';
+import { AlarmListReport, DeviceStatusReport, dispatchUplinkNotification, MINIMUM_ALARM_LIST_MTU } from './UplinkFrame';
 import { DeviceStatus } from '../models/Device';
 import { applyBleStatusReport, initialDeviceStatus } from '../state/deviceStore';
 
@@ -56,7 +56,6 @@ export function useBleConnection(transportFactory: () => BleTransport = createBl
   const attemptRef = useRef(0);
   const connectingRef = useRef(false);
   const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const alarmReaderRef = useRef(new AlarmListReader());
   const alarmListRef = useRef<AlarmListReport | null>(null);
   const [state, setState] = useState<BleConnectionState>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -85,7 +84,6 @@ export function useBleConnection(transportFactory: () => BleTransport = createBl
     unsubscribeRef.current = null;
     controllerRef.current?.cancel();
     controllerRef.current = null;
-    alarmReaderRef.current.clear();
     alarmListRef.current = null;
   }, [clearStatusTimer]);
 
@@ -174,26 +172,29 @@ export function useBleConnection(transportFactory: () => BleTransport = createBl
           const controller = controllerRef.current;
           if (!controller) return;
           try {
-            const notification = dispatchUplinkNotification(bytes, controller, alarmReaderRef.current);
+            if (bytes[3] === READ_ALARMS_OPCODE) {
+              console.log(`BLE alarm frame ${bytes.length}b ${[...bytes].map(byte => byte.toString(16).padStart(2, '0')).join(' ')}`);
+            }
+            const notification = dispatchUplinkNotification(bytes, controller);
             if (notification.kind === 'status') {
               clearStatusTimer();
               setLatestStatus(notification.status);
               setDeviceStatus(previous => applyBleStatusReport(previous, notification.status));
               setProtocolError(null);
               setState('ready');
-            } else if (notification.kind === 'alarm_record') {
-              setLatestAlarmList(previous => applyAlarmRecord(previous, notification.sequence, notification.slot));
-              setProtocolError(null);
             } else if (notification.kind === 'alarm_list') {
+              const occupied = notification.alarmList.slots.filter(slot => slot.occupied);
+              console.log(`BLE alarm list count ${notification.alarmList.alarmCount}: ${occupied.map(slot => `${slot.index} ${String(slot.hour).padStart(2, '0')}:${String(slot.minute).padStart(2, '0')}`).join(', ') || 'empty'}`);
               alarmListRef.current = notification.alarmList;
               setLatestAlarmList(notification.alarmList);
               setDeviceAlarmList(notification.alarmList);
               setProtocolError(null);
-            } else if (notification.kind === 'alarm_end') {
-              setProtocolError(null);
             }
           } catch (failure) {
-            if (failure instanceof BleProtocolError) setProtocolError(failure);
+            if (failure instanceof BleProtocolError) {
+              console.log(`BLE notify rejected ${failure.code}: ${failure.message}`);
+              setProtocolError(failure);
+            }
           }
         },
         fail,

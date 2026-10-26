@@ -7,8 +7,8 @@ import { createManufacturerStatusFixture } from './manufacturerProtocolFixtures'
 
 function statusWithSound(sequence: number, soundId: number, volume: number): Uint8Array {
   const frame = createManufacturerStatusFixture(sequence);
-  frame[8] = volume;
-  frame[9] = soundId;
+  frame[17] = volume;
+  frame[18] = soundId;
   frame[frame.length - 1] = sum8(frame.slice(0, -1));
   return frame;
 }

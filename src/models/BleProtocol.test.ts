@@ -10,8 +10,9 @@ describe('BLE protocol model', () => {
   it.each([
     [0, 255],
     [1, 252],
-    [50, 128],
-    [99, 3],
+    [10, 229],
+    [50, 127],
+    [99, 2],
     [100, 0],
   ])('maps %i%% brightness to inverse raw %i', (percent, raw) => {
     expect(brightnessToInverseRaw(percent)).toBe(raw);

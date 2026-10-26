@@ -7,15 +7,23 @@ import {
 import { AckTransactionController } from './AckTransactionController';
 
 export const STATUS_REPORT_OPCODE = 0x13;
-export const STATUS_REPORT_LENGTH = 14;
+export const STATUS_REPORT_LENGTH = 24;
 export const ALARM_LIST_OPCODE = 0x18;
-export const ALARM_RECORD_LENGTH = 18;
-export const ALARM_LIST_END_LENGTH = 10;
+export const ALARM_LIST_LENGTH = 104;
 export const ALARM_SLOT_COUNT = 10;
+export const ALARM_SLOT_LENGTH = 9;
 export const MINIMUM_ALARM_LIST_MTU = 107;
 
 export interface DeviceStatusReport {
   readonly sequence: number;
+  readonly protocolMajor: number;
+  readonly protocolMinor: number;
+  readonly productId: number;
+  readonly hardwareRevision: number;
+  readonly firmwareMajor: number;
+  readonly firmwareMinor: number;
+  readonly firmwarePatch: number;
+  readonly firmwareBuild: number;
   readonly power: boolean;
   readonly brightnessPercent: number;
   readonly cctW: number;
@@ -24,6 +32,7 @@ export interface DeviceStatusReport {
   readonly soundId: number;
   readonly clockValid: boolean;
   readonly alarmCount: number;
+  readonly deviceState: 0 | 1 | 2 | 3;
   readonly flags: number;
 }
 
@@ -45,22 +54,14 @@ export interface AlarmListReport {
   readonly sequence: number;
   readonly revision: number;
   readonly alarmCount: number;
+  readonly clockValid: boolean;
   readonly slots: readonly DeviceAlarmSlot[];
-}
-
-export interface AlarmListEnd {
-  readonly sequence: number;
-  readonly revision: number;
-  readonly alarmCount: number;
-  readonly listChecksum: number;
 }
 
 export type UplinkNotification =
   | { readonly kind: 'ack' }
   | { readonly kind: 'status'; readonly status: DeviceStatusReport }
-  | { readonly kind: 'alarm_record'; readonly sequence: number; readonly slot: DeviceAlarmSlot }
-  | { readonly kind: 'alarm_list'; readonly alarmList: AlarmListReport }
-  | { readonly kind: 'alarm_end'; readonly end: AlarmListEnd };
+  | { readonly kind: 'alarm_list'; readonly alarmList: AlarmListReport };
 
 function invalidStatus(message: string): never {
   throw new BleProtocolError('invalid_status_value', message);
@@ -96,153 +97,126 @@ export function validateUplinkEnvelope(frame: Uint8Array): void {
 export function parseDeviceStatusFrame(frame: Uint8Array): DeviceStatusReport {
   validateUplinkEnvelope(frame);
   if (frame.length !== STATUS_REPORT_LENGTH) {
-    throw new BleProtocolError('invalid_status_length', 'Status report must contain exactly 14 bytes.');
+    throw new BleProtocolError('invalid_status_length', 'Status report must contain exactly 24 bytes.');
   }
   if (frame[3] !== STATUS_REPORT_OPCODE) {
     throw new BleProtocolError('invalid_notification_opcode', 'Frame is not a device status report.');
   }
 
-  assertRange(frame[4], 0, 1, 'Power');
-  assertRange(frame[5], 0, 100, 'Brightness');
-  assertRange(frame[8], 0, 100, 'Volume');
-  assertRange(frame[9], 0, 25, 'Sound ID');
-  assertRange(frame[10], 0, 1, 'Clock Valid');
-  assertRange(frame[11], 0, 10, 'Alarm Count');
+  assertRange(frame[13], 0, 1, 'Power');
+  assertRange(frame[14], 0, 100, 'Brightness');
+  assertRange(frame[17], 0, 100, 'Volume');
+  assertRange(frame[18], 0, 25, 'Sound ID');
+  assertRange(frame[19], 0, 1, 'Clock Valid');
+  assertRange(frame[20], 0, 10, 'Alarm Count');
+  assertRange(frame[21], 0, 3, 'Device State');
 
   return {
     sequence: frame[2],
-    power: frame[4] === 1,
-    brightnessPercent: frame[5],
-    cctW: frame[6],
-    cctWw: frame[7],
-    volumePercent: frame[8],
-    soundId: frame[9],
-    clockValid: frame[10] === 1,
-    alarmCount: frame[11],
-    flags: frame[12],
+    protocolMajor: frame[4],
+    protocolMinor: frame[5],
+    productId: frame[6],
+    hardwareRevision: frame[7],
+    firmwareMajor: frame[8],
+    firmwareMinor: frame[9],
+    firmwarePatch: frame[10],
+    firmwareBuild: frame[11] | (frame[12] << 8),
+    power: frame[13] === 1,
+    brightnessPercent: frame[14],
+    cctW: frame[15],
+    cctWw: frame[16],
+    volumePercent: frame[17],
+    soundId: frame[18],
+    clockValid: frame[19] === 1,
+    alarmCount: frame[20],
+    deviceState: frame[21] as DeviceStatusReport['deviceState'],
+    flags: frame[22],
   };
 }
 
-export function parseAlarmRecordFrame(frame: Uint8Array): { sequence: number; slot: DeviceAlarmSlot } {
+export function parseAlarmListFrame(frame: Uint8Array): AlarmListReport {
   validateUplinkEnvelope(frame);
-  if (frame.length !== ALARM_RECORD_LENGTH || frame[3] !== ALARM_LIST_OPCODE || frame[4] === 0xFF) {
-    throw new BleProtocolError('invalid_alarm_list_length', 'Alarm record has an unexpected length.');
+  if (frame.length !== ALARM_LIST_LENGTH) {
+    throw new BleProtocolError('invalid_alarm_list_length', 'Alarm list must contain exactly 104 bytes.');
   }
-  const [index, flags, hour, minute, weekdayMask, sunriseMinutes, brightnessPercent, soundId, volumePercent] = [
-    frame[4], frame[5], frame[6], frame[7], frame[8], frame[9], frame[10], frame[11], frame[12],
-  ];
-  const reserved = frame[13] | frame[14] | frame[15] | frame[16];
-  const sunriseOk = sunriseMinutes === 15 || sunriseMinutes === 30 || sunriseMinutes === 45;
-  if ((flags & ~0x03) !== 0) invalidAlarmList('Alarm record has unsupported flag bits.');
-  if (reserved !== 0) invalidAlarmList('Alarm record reserved bytes must be zero.');
-  assertAlarmRange(index, 0, 9, 'Alarm index');
-  assertAlarmRange(hour, 0, 23, 'Alarm hour');
-  assertAlarmRange(minute, 0, 59, 'Alarm minute');
-  assertAlarmRange(weekdayMask, 1, 0x7F, 'Alarm weekday mask');
-  if (!sunriseOk) invalidAlarmList('Alarm sunrise duration is invalid.');
-  assertAlarmRange(brightnessPercent, 0, 100, 'Alarm brightness');
-  assertAlarmRange(soundId, 0, 25, 'Alarm sound ID');
-  assertAlarmRange(volumePercent, 0, 100, 'Alarm volume');
-  return {
-    sequence: frame[2],
-    slot: {
-      index, occupied: true, hour, minute, weekdayMask, soundId, volumePercent,
-      enabled: (flags & 0x01) !== 0,
-      skipNext: (flags & 0x02) !== 0,
-      sunriseMinutes: sunriseMinutes as 15 | 30 | 45,
-      brightnessPercent,
-    },
-  };
-}
-
-export function parseAlarmListEndFrame(frame: Uint8Array): AlarmListEnd {
-  validateUplinkEnvelope(frame);
-  if (frame.length !== ALARM_LIST_END_LENGTH || frame[3] !== ALARM_LIST_OPCODE || frame[4] !== 0xFF) {
-    throw new BleProtocolError('invalid_alarm_list_length', 'Alarm list end has an unexpected length.');
+  if (frame[3] !== ALARM_LIST_OPCODE) {
+    throw new BleProtocolError('invalid_notification_opcode', 'Frame is not an alarm list report.');
+  }
+  if (frame[4] !== 0 || frame[10] !== 0 || frame[101] !== 0 || frame[102] !== 0) {
+    invalidAlarmList('Alarm list reserved bytes must be zero.');
   }
   assertAlarmRange(frame[7], 0, ALARM_SLOT_COUNT, 'Alarm Count');
+  assertAlarmRange(frame[9], 0, 1, 'Clock Valid');
+  if (sum8(frame.slice(11, 101)) !== frame[8]) {
+    throw new BleProtocolError('invalid_alarm_list_checksum', 'Alarm list data checksum is invalid.');
+  }
+
+  const slots: DeviceAlarmSlot[] = [];
+  let occupiedCount = 0;
+  for (let index = 0; index < ALARM_SLOT_COUNT; index += 1) {
+    const offset = 11 + (index * ALARM_SLOT_LENGTH);
+    const bytes = frame.slice(offset, offset + ALARM_SLOT_LENGTH);
+    const flags = bytes[0];
+    if ((flags & 0xF8) !== 0) invalidAlarmList(`Alarm slot ${index + 1} has unsupported flag bits.`);
+    const occupied = (flags & 0x01) !== 0;
+    if (!occupied) {
+      if (bytes.some(value => value !== 0)) invalidAlarmList(`Empty alarm slot ${index + 1} must contain zero bytes.`);
+      slots.push({
+        index, occupied: false, enabled: false, skipNext: false, hour: null, minute: null,
+        weekdayMask: null, sunriseMinutes: null, brightnessPercent: null, soundId: null, volumePercent: null,
+      });
+      continue;
+    }
+
+    occupiedCount += 1;
+    assertAlarmRange(bytes[1], 0, 23, `Alarm slot ${index + 1} hour`);
+    assertAlarmRange(bytes[2], 0, 59, `Alarm slot ${index + 1} minute`);
+    assertAlarmRange(bytes[3], 1, 0x7F, `Alarm slot ${index + 1} weekday mask`);
+    if (bytes[4] !== 15 && bytes[4] !== 30 && bytes[4] !== 45) {
+      invalidAlarmList(`Alarm slot ${index + 1} sunrise duration is invalid.`);
+    }
+    assertAlarmRange(bytes[5], 0, 100, `Alarm slot ${index + 1} brightness`);
+    assertAlarmRange(bytes[6], 0, 25, `Alarm slot ${index + 1} sound ID`);
+    assertAlarmRange(bytes[7], 0, 100, `Alarm slot ${index + 1} volume`);
+    if (bytes[8] !== 0) invalidAlarmList(`Alarm slot ${index + 1} reserved byte must be zero.`);
+    slots.push({
+      index,
+      occupied: true,
+      enabled: (flags & 0x02) !== 0,
+      skipNext: (flags & 0x04) !== 0,
+      hour: bytes[1],
+      minute: bytes[2],
+      weekdayMask: bytes[3],
+      sunriseMinutes: bytes[4] as 15 | 30 | 45,
+      brightnessPercent: bytes[5],
+      soundId: bytes[6],
+      volumePercent: bytes[7],
+    });
+  }
+  if (occupiedCount !== frame[7]) invalidAlarmList('Alarm count does not match the occupied alarm slots.');
+
   return {
     sequence: frame[2],
     revision: frame[5] | (frame[6] << 8),
     alarmCount: frame[7],
-    listChecksum: frame[8],
+    clockValid: frame[9] === 1,
+    slots,
   };
-}
-
-export function applyAlarmRecord(current: AlarmListReport | null, sequence: number, slot: DeviceAlarmSlot): AlarmListReport {
-  const slots = [...(current?.slots ?? []).filter(item => item.index !== slot.index), slot]
-    .sort((left, right) => left.index - right.index);
-  return { sequence, revision: current?.revision ?? 0, alarmCount: slots.length, slots };
-}
-
-export class AlarmListReader {
-  private pending: DeviceAlarmSlot[] = [];
-
-  clear(): void {
-    this.pending = [];
-  }
-
-  push(frame: Uint8Array): UplinkNotification {
-    if (frame[4] === 0xFF) return this.finish(frame);
-    const record = parseAlarmRecordFrame(frame);
-    if (this.pending.some(slot => slot.index === record.slot.index)) {
-      this.pending = [];
-      invalidAlarmList('Alarm record index is repeated.');
-    }
-    this.pending.push(record.slot);
-    return { kind: 'alarm_record', sequence: record.sequence, slot: record.slot };
-  }
-
-  private finish(frame: Uint8Array): UplinkNotification {
-    const end = parseAlarmListEndFrame(frame);
-    const pending = this.pending;
-    this.pending = [];
-    if (pending.length === 0 && end.alarmCount > 0) return { kind: 'alarm_end', end };
-    if (pending.length !== end.alarmCount) invalidAlarmList('Alarm count does not match the occupied alarm slots.');
-    const listed = new Uint8Array(pending.length * 13);
-    [...pending].sort((left, right) => left.index - right.index)
-      .forEach((slot, index) => listed.set(alarmRecordBody(slot), index * 13));
-    if (sum8(listed) !== end.listChecksum) {
-      throw new BleProtocolError('invalid_alarm_list_checksum', 'Alarm list data checksum is invalid.');
-    }
-    const slots = [...pending].sort((left, right) => left.index - right.index);
-    return {
-      kind: 'alarm_list',
-      alarmList: { sequence: end.sequence, revision: end.revision, alarmCount: end.alarmCount, slots },
-    };
-  }
-}
-
-function alarmRecordBody(slot: DeviceAlarmSlot): Uint8Array {
-  return new Uint8Array([
-    slot.index,
-    (slot.enabled ? 0x01 : 0) | (slot.skipNext ? 0x02 : 0),
-    slot.hour ?? 0,
-    slot.minute ?? 0,
-    slot.weekdayMask ?? 0,
-    slot.sunriseMinutes ?? 0,
-    slot.brightnessPercent ?? 0,
-    slot.soundId ?? 0,
-    slot.volumePercent ?? 0,
-    0, 0, 0, 0,
-  ]);
 }
 
 export function dispatchUplinkNotification(
   frame: Uint8Array,
   ackController: AckTransactionController,
-  alarmReader: AlarmListReader,
 ): UplinkNotification {
   validateUplinkEnvelope(frame);
   switch (frame[3]) {
     case ACK_FRAME_OPCODE:
       ackController.handleNotification(frame);
-      alarmReader.clear();
       return { kind: 'ack' };
     case STATUS_REPORT_OPCODE:
       return { kind: 'status', status: parseDeviceStatusFrame(frame) };
     case ALARM_LIST_OPCODE:
-      return alarmReader.push(frame);
+      return { kind: 'alarm_list', alarmList: parseAlarmListFrame(frame) };
     default:
       throw new BleProtocolError('invalid_notification_opcode', 'Device notification opcode is not supported.');
   }

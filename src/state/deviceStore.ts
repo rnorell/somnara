@@ -42,6 +42,8 @@ export function applyBleStatusReport(current: DeviceStatus, report: DeviceStatus
     playbackState: 'unknown',
     clockValidity: report.clockValid ? 'valid' : 'invalid',
     storedAlarmCount: report.alarmCount,
+    firmwareVersion: `${report.firmwareMajor}.${report.firmwareMinor}.${report.firmwarePatch}+${report.firmwareBuild}`,
+    hardwareVersion: String(report.hardwareRevision),
   };
 }
 

@@ -20,7 +20,7 @@ test('fills the protocol fields the alarm form does not ask for', () => {
 
 test('keeps a phone label when the device reads the same slot back', () => {
   const report = {
-    sequence: 1, revision: 4, alarmCount: 1,
+    sequence: 1, revision: 4, alarmCount: 1, clockValid: true,
     slots: [{
       index: 2, occupied: true, enabled: false, skipNext: true, hour: 7, minute: 15,
       weekdayMask: 0x01, sunriseMinutes: 15, brightnessPercent: 50, soundId: 0, volumePercent: 20,

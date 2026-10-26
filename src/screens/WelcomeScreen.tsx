@@ -62,7 +62,7 @@ export function WelcomeScreen({
 }: WelcomeScreenProps) {
   const greeting = useGreeting();
   const {
-    deviceStatus: device, state, error, failureCode, foundDevices, connect, disconnect, commandPending, setPower, setBrightness,
+    deviceStatus: device, state, error, failureCode, foundDevices, connect, disconnect, commandPending, setBrightness,
   } = useSharedBleConnection();
   const busy = state === 'scanning' || state === 'connecting' || state === 'connected_unverified';
   const { preferences, setPreferences, alarms } = useSyncContext();
@@ -146,10 +146,8 @@ export function WelcomeScreen({
 
               <LightControls
                 connected={device.isConnected}
-                powerOn={device.isOn}
                 brightness={device.brightness}
                 busy={commandPending}
-                onPower={setPower}
                 onBrightness={setBrightness}
               />
 

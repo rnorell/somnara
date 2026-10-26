@@ -88,22 +88,22 @@ describe('MockBleTransport', () => {
     expect(power[0][3]).toBe(0x7F);
     expect(power[0][5]).toBe(ACK_RESULT_CODES.OK);
     expect(power[1][3]).toBe(0x13);
-    expect(power[1][4]).toBe(0);
+    expect(power[1][13]).toBe(0);
 
     const brightness = await answered(new MockBleTransport({ simulateDevice: true }), createSetBrightnessFrame({ sequence: 2, brightnessPercent: 50 }));
-    expect(brightness[1][5]).toBe(50);
+    expect(brightness[1][14]).toBe(50);
 
     const colour = await answered(new MockBleTransport({ simulateDevice: true }), createSetColourTemperatureFrame({
       sequence: 3, white: 10, warmWhite: 200, brightnessPercent: 100,
     }));
-    expect(colour[1][5]).toBe(100);
-    expect(colour[1][6]).toBe(10);
-    expect(colour[1][7]).toBe(200);
+    expect(colour[1][14]).toBe(100);
+    expect(colour[1][15]).toBe(10);
+    expect(colour[1][16]).toBe(200);
 
     const clock = await answered(new MockBleTransport({ simulateDevice: true }), createSetClockFrame({
       sequence: 4, year: 2026, month: 10, day: 6, hour: 11, minute: 30, second: 0, weekday: 2,
     }));
-    expect(clock[1][10]).toBe(1);
+    expect(clock[1][19]).toBe(1);
 
     const status = await answered(new MockBleTransport({ simulateDevice: true }), createGetStatusFrame({ sequence: 5, queryToken: 1 }));
     expect(status[0][4]).toBe(0x13);
@@ -127,7 +127,7 @@ describe('MockBleTransport', () => {
 
     expect(notes[0][5]).toBe(ACK_RESULT_CODES.AUDIO_NOT_FOUND);
     expect(notes[1][5]).toBe(ACK_RESULT_CODES.BUSY);
-    expect(notes.some(frame => frame[3] === 0x13 && frame[4] === 0)).toBe(false);
+    expect(notes.some(frame => frame[3] === 0x13 && frame[13] === 0)).toBe(false);
   });
 
   it('rejects a bad brightness value and does not change the light', async () => {
@@ -162,36 +162,37 @@ describe('MockBleTransport', () => {
     expect(saved.map(frame => frame[3])).toEqual([0x7F, 0x18]);
     expect(saved[0][5]).toBe(ACK_RESULT_CODES.OK);
     expect(saved[1][4]).toBe(0);
-    expect(saved[1][5]).toBe(0x01);
-    expect(saved[1][6]).toBe(7);
+    expect(saved[1][11]).toBe(0x03);
+    expect(saved[1][12]).toBe(7);
 
     const listed = await send(createReadAlarmsFrame({ sequence: 2, queryToken: 1 }));
-    expect(listed).toHaveLength(3);
-    expect(listed[2][4]).toBe(0xFF);
-    expect(listed[2][7]).toBe(1);
+    expect(listed).toHaveLength(2);
+    expect(listed[1]).toHaveLength(104);
+    expect(listed[1][7]).toBe(1);
 
     const status = await send(createGetStatusFrame({ sequence: 3, queryToken: 1 }));
-    expect(status[1][11]).toBe(1);
+    expect(status[1][20]).toBe(1);
 
     const begun = await send(createBeginAlarmSyncFrame({ sequence: 4, revision: 0x0102, alarmCount: 1 }));
     expect(begun).toHaveLength(1);
     expect(begun[0][5]).toBe(ACK_RESULT_CODES.OK);
     const staged = await send(createUpsertAlarmFrame({ ...alarm, sequence: 5, alarmIndex: 3, hour: 8 }));
-    expect(staged[1][4]).toBe(3);
+    expect(staged[1][7]).toBe(1);
+    expect(staged[1][12]).toBe(7);
     const during = await send(createReadAlarmsFrame({ sequence: 6, queryToken: 2 }));
     expect(during[during.length - 1][7]).toBe(1);
     expect(during.some(frame => frame[4] === 3)).toBe(false);
 
     const committed = await send(createCommitAlarmSyncFrame({ sequence: 7, revision: 0x0102, alarmCount: 1 }));
     expect(committed[0][5]).toBe(ACK_RESULT_CODES.OK);
-    expect(committed[1][4]).toBe(0xFF);
+    expect(committed[1][4]).toBe(0);
     expect(committed[1][5]).toBe(0x02);
     expect(committed[1][6]).toBe(0x01);
     expect(committed[1][7]).toBe(1);
     const replaced = await send(createReadAlarmsFrame({ sequence: 8, queryToken: 3 }));
-    expect(replaced).toHaveLength(3);
-    expect(replaced[1][4]).toBe(3);
-    expect(replaced[1][6]).toBe(8);
+    expect(replaced).toHaveLength(2);
+    expect(replaced[1][38]).toBe(0x03);
+    expect(replaced[1][39]).toBe(8);
 
     const conflict = await send(createCommitAlarmSyncFrame({ sequence: 9, revision: 0x0102, alarmCount: 1 }));
     expect(conflict[0][5]).toBe(ACK_RESULT_CODES.SYNC_CONFLICT);
@@ -206,15 +207,15 @@ describe('MockBleTransport', () => {
     invalid[9] = 20;
     invalid[invalid.length - 1] = invalid.slice(0, -1).reduce((sum, byte) => (sum + byte) & 0xFF, 0);
     expect((await send(invalid))[0][5]).toBe(ACK_RESULT_CODES.INVALID_VALUE);
-    expect((await send(createReadAlarmsFrame({ sequence: 12, queryToken: 4 })))[1][6]).toBe(8);
+    expect((await send(createReadAlarmsFrame({ sequence: 12, queryToken: 4 })))[1][39]).toBe(8);
 
     (transport as unknown as { clockValid: boolean }).clockValid = false;
     expect((await send(createDeleteAlarmFrame({ sequence: 13, alarmIndex: 3 })))[0][5]).toBe(ACK_RESULT_CODES.CLOCK_INVALID);
-    expect((await send(createReadAlarmsFrame({ sequence: 14, queryToken: 5 })))).toHaveLength(3);
+    expect((await send(createReadAlarmsFrame({ sequence: 14, queryToken: 5 })))).toHaveLength(2);
     await send(createSetClockFrame({
       sequence: 15, year: 2026, month: 10, day: 8, hour: 9, minute: 0, second: 0, weekday: 4,
     }));
-    expect((await send(createSkipNextAlarmFrame({ sequence: 16, alarmIndex: 3, skip: true })))[1][5]).toBe(0x03);
+    expect((await send(createSkipNextAlarmFrame({ sequence: 16, alarmIndex: 3, skip: true })))[1][38]).toBe(0x07);
     expect((await send(createDeleteAlarmFrame({ sequence: 17, alarmIndex: 3 })))).toHaveLength(1);
     expect((await send(createReadAlarmsFrame({ sequence: 18, queryToken: 6 })))).toHaveLength(2);
 
@@ -224,7 +225,7 @@ describe('MockBleTransport', () => {
     transport.subscribe(bytes => notes.push(bytes), () => undefined);
     await jest.advanceTimersByTimeAsync(150);
     const restored = await send(createReadAlarmsFrame({ sequence: 20, queryToken: 7 }));
-    expect(restored).toHaveLength(3);
+    expect(restored).toHaveLength(2);
     expect(restored[1][4]).toBe(0);
   });
 

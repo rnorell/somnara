@@ -2,18 +2,12 @@ import { act, renderHook } from '@testing-library/react-native';
 import { MockBleTransport } from './MockBleTransport';
 import { stateAfterConnection, useBleConnection } from './useBleConnection';
 import { BleTransportError } from './types';
-import { createAckFrame, sum8 } from './AckFrame';
+import { createAckFrame } from './AckFrame';
 import { createSetBrightnessFrame, createSetPowerFrame, createSetVolumeFrame, SET_BRIGHTNESS_OPCODE, SET_POWER_OPCODE, SET_VOLUME_OPCODE } from './DownlinkFrame';
-import { STATUS_REPORT_LENGTH, STATUS_REPORT_OPCODE } from './UplinkFrame';
-import { createManufacturerAlarmListFrames } from './manufacturerProtocolFixtures';
+import { createManufacturerAlarmListFixture, createManufacturerStatusFixture } from './manufacturerProtocolFixtures';
 
 function automaticStatusFrame(): Uint8Array {
-  const frame = new Uint8Array([
-    0xFF, STATUS_REPORT_LENGTH, 0xFF, STATUS_REPORT_OPCODE,
-    1, 60, 100, 0, 30, 4, 1, 2, 0, 0,
-  ]);
-  frame[frame.length - 1] = sum8(frame.slice(0, -1));
-  return frame;
+  return createManufacturerStatusFixture();
 }
 
 describe('useBleConnection', () => {
@@ -224,8 +218,8 @@ describe('useBleConnection', () => {
       activeSoundId: 4,
       clockValidity: 'valid',
       storedAlarmCount: 2,
-      firmwareVersion: null,
-      hardwareVersion: null,
+      firmwareVersion: '0.0.2+0',
+      hardwareVersion: '0',
     });
     await unmount();
   });
@@ -235,10 +229,10 @@ describe('useBleConnection', () => {
     const { result, unmount } = await renderHook(() => useBleConnection(() => transport));
     await act(async () => { await result.current.connect(transport.candidate.id); });
     await act(async () => {
-      createManufacturerAlarmListFrames().forEach(frame => transport.emitNotification(frame));
+      transport.emitNotification(createManufacturerAlarmListFixture());
     });
     expect(result.current.latestAlarmList).toMatchObject({ revision: 3, alarmCount: 2 });
-    expect(result.current.latestAlarmList?.slots).toHaveLength(2);
+    expect(result.current.latestAlarmList?.slots).toHaveLength(10);
     expect(result.current.latestAlarmList?.slots[1].skipNext).toBe(true);
     await unmount();
   });
@@ -384,7 +378,7 @@ describe('native onboarding readiness', () => {
       await pending;
     });
     expect(transport.writtenFrames.slice(replaceFrom).map(frame => frame[3])).toEqual([0x19, 0x17, 0x17, 0x1A, 0x13, 0x18]);
-    expect(result.current.deviceAlarmList?.slots.map(slot => slot.index)).toEqual([0, 1]);
+    expect(result.current.deviceAlarmList?.slots.filter(slot => slot.occupied).map(slot => slot.index)).toEqual([0, 1]);
     await unmount();
     jest.useRealTimers();
   });

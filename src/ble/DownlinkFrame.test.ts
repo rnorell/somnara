@@ -92,7 +92,7 @@ describe('v0.9 core control frames', () => {
 
   it('creates a Set Brightness 0x07 frame with the inverse byte', () => {
     const frame = createSetBrightnessFrame({ sequence: 2, brightnessPercent: 50 });
-    expect(frame).toEqual(new Uint8Array([0xFF, SET_BRIGHTNESS_FRAME_LENGTH, 0x02, 0x07, 50, 128, sum8(frame.slice(0, 6))]));
+    expect(frame).toEqual(new Uint8Array([0xFF, SET_BRIGHTNESS_FRAME_LENGTH, 0x02, 0x07, 50, 127, sum8(frame.slice(0, 6))]));
   });
 
   it('creates a Set Colour Temperature 0x04 frame', () => {

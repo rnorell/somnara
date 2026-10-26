@@ -22,6 +22,7 @@ import {
 } from './DownlinkFrame';
 import { brightnessToInverseRaw } from '../models/BleProtocol';
 import { createManufacturerStatusFixture } from './manufacturerProtocolFixtures';
+import { ALARM_LIST_LENGTH, ALARM_SLOT_LENGTH } from './UplinkFrame';
 
 export interface MockBleTransportOptions {
   /** Answer writes with ACK + 0x13 status like the real device (dev demo mode). */
@@ -296,16 +297,13 @@ export class MockBleTransport implements BleTransport {
       this.responsePending = false;
       this.onData?.(createAckFrame({ sequence, requestOpcode: opcode, resultCode, detail: 0 }));
       if (resultCode !== ACK_RESULT_CODES.OK) return;
-      if (opcode === UPSERT_ALARM_OPCODE || opcode === SKIP_NEXT_ALARM_OPCODE) {
-        const alarm = (this.stage?.slots ?? this.committed).get(frame[4]);
-        if (alarm) this.onData?.(this.alarmRecord(sequence, alarm));
-        return;
-      }
-      if (opcode !== READ_ALARMS_OPCODE && opcode !== COMMIT_ALARM_SYNC_OPCODE) return;
-      if (opcode === READ_ALARMS_OPCODE) {
-        this.committedAlarms().forEach(alarm => this.onData?.(this.alarmRecord(sequence, alarm)));
-      }
-      this.onData?.(this.alarmEnd(sequence));
+      if (
+        opcode !== READ_ALARMS_OPCODE
+        && opcode !== COMMIT_ALARM_SYNC_OPCODE
+        && opcode !== UPSERT_ALARM_OPCODE
+        && opcode !== SKIP_NEXT_ALARM_OPCODE
+      ) return;
+      this.onData?.(this.alarmList(sequence));
     });
   }
 
@@ -313,24 +311,16 @@ export class MockBleTransport implements BleTransport {
     return [...this.committed.values()].sort((left, right) => left.index - right.index);
   }
 
-  private alarmRecord(sequence: number, alarm: StoredAlarm): Uint8Array {
-    const frame = new Uint8Array(UPSERT_ALARM_FRAME_LENGTH);
-    frame.set([0xFF, UPSERT_ALARM_FRAME_LENGTH, sequence, READ_ALARMS_OPCODE]);
-    frame.set(alarmBody(alarm), 4);
-    frame[17] = sum8(frame.slice(0, 17));
-    return frame;
-  }
-
-  // End event: record type 0xFF, little-endian revision, count, then the sum of the record bytes.
-  private alarmEnd(sequence: number): Uint8Array {
+  private alarmList(sequence: number): Uint8Array {
+    const frame = new Uint8Array(ALARM_LIST_LENGTH);
     const alarms = this.committedAlarms();
-    const listed = new Uint8Array(alarms.length * 13);
-    alarms.forEach((alarm, index) => listed.set(alarmBody(alarm), index * 13));
-    const frame = new Uint8Array([
-      0xFF, 10, sequence, READ_ALARMS_OPCODE, 0xFF,
-      this.revision & 0xFF, (this.revision >> 8) & 0xFF, alarms.length, sum8(listed), 0,
+    frame.set([
+      0xFF, ALARM_LIST_LENGTH, sequence, READ_ALARMS_OPCODE, 0,
+      this.revision & 0xFF, (this.revision >> 8) & 0xFF, alarms.length, 0, this.clockValid ? 1 : 0, 0,
     ]);
-    frame[9] = sum8(frame.slice(0, 9));
+    alarms.forEach(alarm => frame.set(alarmSlot(alarm), 11 + (alarm.index * ALARM_SLOT_LENGTH)));
+    frame[8] = sum8(frame.slice(11, 101));
+    frame[ALARM_LIST_LENGTH - 1] = sum8(frame.slice(0, ALARM_LIST_LENGTH - 1));
     return frame;
   }
 
@@ -352,14 +342,14 @@ export class MockBleTransport implements BleTransport {
 
   private simulatedStatus(sequence: number): void {
     const frame = createManufacturerStatusFixture(sequence);
-    frame[4] = this.powerOn ? 1 : 0;
-    frame[5] = this.brightness;
-    frame[6] = this.white;
-    frame[7] = this.warmWhite;
-    frame[8] = this.simulatedVolume;
-    frame[9] = this.simulatedSoundId;
-    frame[10] = this.clockValid ? 1 : 0;
-    frame[11] = this.committed.size;
+    frame[13] = this.powerOn ? 1 : 0;
+    frame[14] = this.brightness;
+    frame[15] = this.white;
+    frame[16] = this.warmWhite;
+    frame[17] = this.simulatedVolume;
+    frame[18] = this.simulatedSoundId;
+    frame[19] = this.clockValid ? 1 : 0;
+    frame[20] = this.committed.size;
     frame[frame.length - 1] = sum8(frame.slice(0, -1));
     this.onData?.(frame);
   }
@@ -457,10 +447,9 @@ interface AlarmStage {
   readonly slots: Map<number, StoredAlarm>;
 }
 
-function alarmBody(alarm: StoredAlarm): Uint8Array {
+function alarmSlot(alarm: StoredAlarm): Uint8Array {
   return new Uint8Array([
-    alarm.index,
-    (alarm.enabled ? 0x01 : 0) | (alarm.skipNext ? 0x02 : 0),
+    0x01 | (alarm.enabled ? 0x02 : 0) | (alarm.skipNext ? 0x04 : 0),
     alarm.hour,
     alarm.minute,
     alarm.weekdayMask,
@@ -468,6 +457,6 @@ function alarmBody(alarm: StoredAlarm): Uint8Array {
     alarm.brightnessPercent,
     alarm.soundId,
     alarm.volumePercent,
-    0, 0, 0, 0,
+    0,
   ]);
 }

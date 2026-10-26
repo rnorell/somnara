@@ -91,7 +91,7 @@ test('next alarm card opens Alarms and its toggle disables the alarm', async () 
 
 test('quick tiles show a message or navigate', async () => {
   await renderScreen();
-  expect(screen.getByLabelText('Turn on')).toBeTruthy();
+  expect(screen.getByLabelText('Brightness down')).toBeTruthy();
   await fireEvent.press(screen.getByText('Sleep Mode'));
   await fireEvent.press(screen.getByText('Routines'));
   expect(mockShowMessage).toHaveBeenCalledTimes(2);

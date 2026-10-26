@@ -7,14 +7,12 @@ const BRIGHTNESS_STEP = 10;
 
 interface Props {
   connected: boolean;
-  powerOn: boolean;
   brightness: number;
   busy: boolean;
-  onPower: (on: boolean) => Promise<void>;
   onBrightness: (percent: number) => Promise<void>;
 }
 
-export function LightControls({ connected, powerOn, brightness, busy, onPower, onBrightness }: Props) {
+export function LightControls({ connected, brightness, busy, onBrightness }: Props) {
   const [level, setLevel] = useState(brightness);
   const [error, setError] = useState<string | null>(null);
   const disabled = !connected || busy;
@@ -28,6 +26,7 @@ export function LightControls({ connected, powerOn, brightness, busy, onPower, o
     try {
       await action();
     } catch (failure) {
+      setLevel(brightness);
       setError(failure instanceof Error ? failure.message : 'Somnara could not complete that.');
     }
   }
@@ -49,17 +48,6 @@ export function LightControls({ connected, powerOn, brightness, busy, onPower, o
       {!connected ? (
         <Text style={styles.hint}>Connect your Somnara to control the light.</Text>
       ) : null}
-
-      <TouchableOpacity
-        style={[styles.power, disabled && styles.dim]}
-        onPress={() => void run(() => onPower(!powerOn))}
-        disabled={disabled}
-        accessibilityRole="button"
-        accessibilityLabel={powerOn ? 'Turn off' : 'Turn on'}
-      >
-        <Feather name="power" size={16} color={powerOn ? colors.success : colors.accent.DEFAULT} />
-        <Text style={styles.powerText}>{powerOn ? 'On' : 'Off'}</Text>
-      </TouchableOpacity>
 
       <View style={[styles.brightnessRow, disabled && styles.dim]}>
         <Text style={styles.label}>Brightness</Text>
@@ -107,21 +95,6 @@ const styles = StyleSheet.create({
   hint: {
     fontSize: typography.sizes.sm,
     color: colors.text.secondary,
-  },
-  power: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing['2'],
-    alignSelf: 'flex-start',
-    backgroundColor: colors.background.primary,
-    borderRadius: radii.full,
-    paddingHorizontal: spacing['3'],
-    paddingVertical: spacing['2'],
-  },
-  powerText: {
-    fontSize: typography.sizes.sm,
-    fontWeight: typography.weights.medium,
-    color: colors.text.primary,
   },
   brightnessRow: {
     flexDirection: 'row',

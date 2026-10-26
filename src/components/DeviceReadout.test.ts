@@ -1,5 +1,5 @@
 import { readoutRows } from './DeviceReadout';
-import { AlarmListReader, parseDeviceStatusFrame } from '../ble/UplinkFrame';
+import { parseAlarmListFrame, parseDeviceStatusFrame } from '../ble/UplinkFrame';
 import { manufacturerProtocolFixtures } from '../ble/manufacturerProtocolFixtures';
 
 test('lists every status field reported by the device', () => {
@@ -15,13 +15,7 @@ test('lists every status field reported by the device', () => {
 });
 
 test('lists occupied alarm slots from the device alarm list', () => {
-  const reader = new AlarmListReader();
-  let alarmList = null;
-  for (const frame of manufacturerProtocolFixtures.alarmList) {
-    const notification = reader.push(frame);
-    if (notification.kind === 'alarm_list') alarmList = notification.alarmList;
-  }
-  if (!alarmList) throw new Error('Alarm list did not finish.');
+  const alarmList = parseAlarmListFrame(manufacturerProtocolFixtures.alarmList);
   const rows = Object.fromEntries(readoutRows('ready', null, alarmList, null));
   expect(rows['Status report']).toBe('None received yet');
   expect(rows['Device alarm slot 0']).toMatch(/^07:30 · days 0x3E · sound 4 · on/);
